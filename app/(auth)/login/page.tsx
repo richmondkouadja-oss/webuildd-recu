@@ -18,22 +18,29 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+async function handleLogin(e: React.FormEvent) {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError('Email ou mot de passe incorrect');
-      setLoading(false);
-      return;
-    }
-
-    router.push('/');
-    router.refresh();
+  if (error) {
+    setError('Email ou mot de passe incorrect');
+    setLoading(false);
+    return;
   }
+
+  // Attendre que la session soit bien enregistrée
+  if (data.session) {
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  }
+
+  window.location.href = '/';
+}
 
   return (
     <Card className="w-full max-w-md border-0 shadow-2xl">

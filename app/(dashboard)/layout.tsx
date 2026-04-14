@@ -12,7 +12,6 @@ import {
   MapPin,
   LogOut,
   Menu,
-  X,
   PlusCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,10 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
+      if (!user) return;
       const { data } = await supabase
         .from('profiles')
         .select('*')
@@ -51,17 +47,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.push('/login');
+    window.location.href = '/login';
   }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-[260px] bg-[#0F0F0F] text-white flex flex-col transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-6 border-b border-[#2A2A2A]">
           <div className="flex items-center gap-3">
@@ -118,7 +112,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 border-b bg-white flex items-center justify-between px-4 lg:px-6 shrink-0">
           <Button
