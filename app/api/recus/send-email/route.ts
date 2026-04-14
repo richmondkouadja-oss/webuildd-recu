@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResendClient() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) throw new Error('RESEND_API_KEY non configurée');
+  return new Resend(key);
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
@@ -20,6 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const resend = getResendClient();
     const emailResult = await resend.emails.send({
       from: 'WEBUILDD F&I <recus@webuildd.ci>',
       to: [receipt.client_email],
