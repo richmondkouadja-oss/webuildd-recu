@@ -5,37 +5,37 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { formatCFA, formatDate, cleanPhoneNumber } from '@/lib/utils/formatters';
 import type { Receipt } from '@/lib/supabase/types';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Eye, MessageCircle, Mail, Download, XCircle, PlusCircle, Search,
+  PlusCircle, Search, ArrowRight, MessageCircle,
+  Mail, Download, XCircle, FileText, ChevronLeft, ChevronRight,
+  CheckCircle2, Clock, Ban,
 } from 'lucide-react';
+
+const PER_PAGE_OPTIONS = [5, 10, 20, 50];
 
 export default function RecusPage() {
   const supabase = createClient();
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [search, setSearch] = useState('');
+  const [receipts, setReceipts]     = useState<Receipt[]>([]);
+  const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
+  const [selected, setSelected]     = useState<Set<string>>(new Set());
+  const [page, setPage]             = useState(1);
+  const [perPage, setPerPage]       = useState(10);
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; receiptId: string }>({ open: false, receiptId: '' });
   const [cancelReason, setCancelReason] = useState('');
 
-  useEffect(() => {
-    loadReceipts();
-  }, []);
+  useEffect(() => { loadReceipts(); }, []);
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   async function loadReceipts() {
     setLoading(true);
-    const { data } = await supabase
-      .from('receipts')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data } = await supabase.from('receipts').select('*').order('created_at', { ascending: false });
     if (data) setReceipts(data);
     setLoading(false);
   }
@@ -48,25 +48,28 @@ export default function RecusPage() {
     return matchSearch && matchStatus;
   });
 
-  function statusBadge(status: string) {
-    switch (status) {
-      case 'soldé':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Soldé</Badge>;
-      case 'partiel':
-        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Partiel</Badge>;
-      case 'annulé':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 line-through">Annulé</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const paginated  = filtered.slice((page - 1) * perPage, page * perPage);
+
+  // ── selection ──
+  function toggleAll() {
+    if (paginated.every(r => selected.has(r.id)) && paginated.length > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(paginated.map(r => r.id)));
     }
   }
+  function toggleOne(id: string) {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  }
+  const allChecked = paginated.length > 0 && paginated.every(r => selected.has(r.id));
 
+  // ── actions ──
   async function cancelReceipt() {
     if (!cancelReason.trim()) return;
-    await supabase
-      .from('receipts')
-      .update({ status: 'annulé', cancel_reason: cancelReason })
-      .eq('id', cancelDialog.receiptId);
+    await supabase.from('receipts').update({ status: 'annulé', cancel_reason: cancelReason }).eq('id', cancelDialog.receiptId);
     setCancelDialog({ open: false, receiptId: '' });
     setCancelReason('');
     loadReceipts();
@@ -80,11 +83,7 @@ export default function RecusPage() {
       `WEBUILDD FONCIER & IMMOBILIER\nMarcory Zone 4 — Abidjan`
     );
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
-    supabase.from('receipt_sends').insert({
-      receipt_id: receipt.id,
-      channel: 'whatsapp',
-      recipient: phone,
-    });
+    supabase.from('receipt_sends').insert({ receipt_id: receipt.id, channel: 'whatsapp', recipient: phone });
   }
 
   async function sendEmail(receipt: Receipt) {
@@ -95,153 +94,276 @@ export default function RecusPage() {
         body: JSON.stringify({ receiptId: receipt.id }),
       });
       alert('Email envoyé');
-    } catch {
-      alert("Erreur lors de l'envoi");
-    }
+    } catch { alert("Erreur lors de l'envoi"); }
   }
 
+  // Quick counts
+  const counts = {
+    solde:  receipts.filter(r => r.status === 'soldé').length,
+    partiel:receipts.filter(r => r.status === 'partiel').length,
+    annule: receipts.filter(r => r.status === 'annulé').length,
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="font-heading text-2xl font-bold">Reçus de paiement</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Reçus de paiement</h1>
+          <p className="text-sm text-slate-400 mt-0.5">{receipts.length} reçu{receipts.length !== 1 ? 's' : ''} au total</p>
+        </div>
         <Link href="/recus/nouveau">
-          <Button className="bg-[#8B1A1A] hover:bg-[#6B1414]">
-            <PlusCircle className="mr-2 h-4 w-4" />
+          <button className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm shadow-red-200">
+            <PlusCircle className="h-4 w-4" />
             Nouveau reçu
-          </Button>
+          </button>
         </Link>
       </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Rechercher par nom, N° reçu, N° lot..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+      {/* Quick stat cards */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Soldés',   count: counts.solde,   icon: CheckCircle2, cardBg: 'bg-emerald-50', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-500', valueColor: 'text-emerald-700' },
+          { label: 'Partiels', count: counts.partiel, icon: Clock,        cardBg: 'bg-amber-50',   iconBg: 'bg-amber-100',   iconColor: 'text-amber-500',   valueColor: 'text-amber-700'   },
+          { label: 'Annulés',  count: counts.annule,  icon: Ban,          cardBg: 'bg-red-50',     iconBg: 'bg-red-100',     iconColor: 'text-red-400',     valueColor: 'text-red-600'     },
+        ].map((s, i) => (
+          <div key={i} className={`${s.cardBg} rounded-2xl p-5 shadow-sm flex items-center gap-4`}>
+            <div className={`${s.iconBg} w-12 h-12 rounded-xl flex items-center justify-center shrink-0`}>
+              <s.icon className={`h-6 w-6 ${s.iconColor}`} />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || 'all')}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                <SelectItem value="partiel">Partiel</SelectItem>
-                <SelectItem value="soldé">Soldé</SelectItem>
-                <SelectItem value="annulé">Annulé</SelectItem>
-              </SelectContent>
-            </Select>
+            <div>
+              <p className="text-xs font-medium text-slate-500 leading-none">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 leading-none ${s.valueColor}`}>{s.count}</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50 text-left">
-                  <th className="p-3 font-medium text-muted-foreground">N° Reçu</th>
-                  <th className="p-3 font-medium text-muted-foreground">Date</th>
-                  <th className="p-3 font-medium text-muted-foreground">Client</th>
-                  <th className="p-3 font-medium text-muted-foreground">Site</th>
-                  <th className="p-3 font-medium text-muted-foreground text-right">Total</th>
-                  <th className="p-3 font-medium text-muted-foreground text-right">Versé</th>
-                  <th className="p-3 font-medium text-muted-foreground text-right">Reste</th>
-                  <th className="p-3 font-medium text-muted-foreground">Statut</th>
-                  <th className="p-3 font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(r => (
-                  <tr key={r.id} className="border-b hover:bg-gray-50/50">
-                    <td className="p-3 font-mono text-xs">{r.receipt_number}</td>
-                    <td className="p-3">{formatDate(r.receipt_date)}</td>
-                    <td className="p-3 font-medium">{r.client_name}</td>
-                    <td className="p-3 text-muted-foreground">{r.lotissement_name || '—'}</td>
-                    <td className="p-3 text-right">{formatCFA(r.total_amount)}</td>
-                    <td className="p-3 text-right font-medium">{formatCFA(r.amount_paid)}</td>
-                    <td className={`p-3 text-right ${r.amount_due > 0 ? 'text-red-600' : 'text-green-600'}`}>
+      {/* Search + filter */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Rechercher par nom, N° reçu..."
+              className="pl-9 border-slate-200 bg-slate-50 placeholder:text-slate-400 text-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || 'all')}>
+            <SelectTrigger className="w-[160px] border-slate-200 bg-slate-50 text-sm">
+              <SelectValue placeholder="Statut" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              <SelectItem value="partiel">Partiel</SelectItem>
+              <SelectItem value="soldé">Soldé</SelectItem>
+              <SelectItem value="annulé">Annulé</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/60">
+                <th className="w-12 px-4 py-3.5">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={toggleAll}
+                    className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer"
+                  />
+                </th>
+                <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">N° Reçu</th>
+                <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Client</th>
+                <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Site</th>
+                <th className="text-right text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Versé</th>
+                <th className="text-right text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Reste</th>
+                <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Statut</th>
+                <th className="text-right text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.map((r) => {
+                const isSelected = selected.has(r.id);
+                return (
+                  <tr
+                    key={r.id}
+                    className={`table-row-hover border-b border-slate-100 last:border-0 ${isSelected ? 'bg-red-50/20' : ''}`}
+                  >
+                    {/* Checkbox */}
+                    <td className="w-12 px-4 py-3.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOne(r.id)}
+                        className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer"
+                      />
+                    </td>
+
+                    {/* N° */}
+                    <td className="px-4 py-3.5">
+                      <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{r.receipt_number}</span>
+                    </td>
+
+                    {/* Client + date */}
+                    <td className="px-4 py-3.5">
+                      <p className="font-medium text-slate-800 leading-none">{r.client_name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{formatDate(r.receipt_date)}</p>
+                    </td>
+
+                    {/* Site */}
+                    <td className="px-4 py-3.5 text-slate-500">{r.lotissement_name || '—'}</td>
+
+                    {/* Versé */}
+                    <td className="px-4 py-3.5 text-right font-semibold text-emerald-600">{formatCFA(r.amount_paid)}</td>
+
+                    {/* Reste */}
+                    <td className={`px-4 py-3.5 text-right font-semibold ${r.amount_due > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                       {formatCFA(r.amount_due)}
                     </td>
-                    <td className="p-3">{statusBadge(r.status)}</td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1">
-                        <Link href={`/recus/${r.id}`}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Voir">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="WhatsApp" onClick={() => sendWhatsApp(r)}>
-                          <MessageCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Email" onClick={() => sendEmail(r)}>
-                          <Mail className="h-4 w-4" />
-                        </Button>
+
+                    {/* Statut */}
+                    <td className="px-4 py-3.5">
+                      {r.status === 'soldé'  && <span className="status-badge-solde">Soldé</span>}
+                      {r.status === 'partiel' && <span className="status-badge-partiel">Partiel</span>}
+                      {r.status === 'annulé' && <span className="status-badge-annule">Annulé</span>}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => sendWhatsApp(r)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 flex items-center justify-center transition-colors" title="WhatsApp">
+                          <MessageCircle className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                        <button onClick={() => sendEmail(r)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 flex items-center justify-center transition-colors" title="Email">
+                          <Mail className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
                         {r.pdf_url && (
                           <a href={r.pdf_url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Télécharger">
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Télécharger">
+                              <Download className="h-3.5 w-3.5 text-slate-400" />
+                            </button>
                           </a>
                         )}
                         {r.status !== 'annulé' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-600 hover:text-red-700"
-                            title="Annuler"
+                          <button
                             onClick={() => setCancelDialog({ open: true, receiptId: r.id })}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-colors"
+                            title="Annuler"
                           >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
+                            <XCircle className="h-3.5 w-3.5 text-slate-400" />
+                          </button>
                         )}
+                        <Link href={`/recus/${r.id}`}>
+                          <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors" title="Voir">
+                            <ArrowRight className="h-3.5 w-3.5 text-slate-400 hover:text-red-600" />
+                          </button>
+                        </Link>
                       </div>
                     </td>
                   </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                      {loading ? 'Chargement...' : 'Aucun reçu trouvé'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                );
+              })}
+              {paginated.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    {loading ? (
+                      <p className="text-sm text-slate-400">Chargement...</p>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                          <FileText className="h-5 w-5 text-slate-300" />
+                        </div>
+                        <p className="text-sm text-slate-400">Aucun reçu trouvé</p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-end gap-4 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>Lignes par page</span>
+              <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs border-slate-200 bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PER_PAGE_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <span className="text-xs text-slate-500">
+              {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} sur {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5 text-slate-500" />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+              </button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* Cancel dialog */}
       <Dialog open={cancelDialog.open} onOpenChange={(v) => setCancelDialog({ ...cancelDialog, open: v })}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Annuler ce reçu</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-slate-800">Annuler ce reçu</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <Label>Motif d&apos;annulation *</Label>
-            <Textarea
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Raison de l'annulation..."
-              rows={3}
-            />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setCancelDialog({ open: false, receiptId: '' })}>
+          <div className="space-y-4 pt-1">
+            <div className="bg-red-50 border border-red-200/60 rounded-lg px-4 py-3">
+              <p className="text-xs text-red-700">Cette action est irréversible. Le reçu sera marqué comme annulé.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">
+                Motif d&apos;annulation <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Raison de l'annulation..."
+                rows={3}
+                className="border-slate-200 text-sm resize-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                onClick={() => setCancelDialog({ open: false, receiptId: '' })}
+              >
                 Annuler
-              </Button>
-              <Button
-                className="bg-red-600 hover:bg-red-700 text-white"
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={cancelReceipt}
                 disabled={!cancelReason.trim()}
               >
                 Confirmer l&apos;annulation
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>
