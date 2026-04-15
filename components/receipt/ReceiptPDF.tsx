@@ -6,7 +6,7 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
+  Image,
 } from '@react-pdf/renderer';
 import { formatCFA, formatDate } from '@/lib/utils/formatters';
 import type { Receipt, ReceiptLot } from '@/lib/supabase/types';
@@ -14,6 +14,9 @@ import type { Receipt, ReceiptLot } from '@/lib/supabase/types';
 const WEBUILDD_RED = '#8B1A1A';
 const GRAY_DARK = '#1A1A1A';
 const GRAY_LIGHT = '#F5F5F5';
+
+// Logo WEBUILDD en base64
+const LOGO_BASE64 = 'data:image/png;base64,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';
 
 const styles = StyleSheet.create({
   page: {
@@ -25,10 +28,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: WEBUILDD_RED,
     paddingBottom: 12,
     marginBottom: 16,
+  },
+  headerLeft: {
+    flex: 1,
   },
   logo: {
     fontSize: 16,
@@ -40,17 +47,17 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  logoImage: {
+    width: 120,
+    height: 40,
+    objectFit: 'contain',
+  },
   title: {
     textAlign: 'center',
     fontSize: 16,
     fontFamily: 'Helvetica-Bold',
     color: WEBUILDD_RED,
     marginVertical: 12,
-  },
-  receiptInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
   },
   section: {
     marginBottom: 12,
@@ -198,18 +205,21 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
+        {/* Header avec logo */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerLeft}>
             <Text style={styles.logo}>WEBUILDD FONCIER & IMMOBILIER</Text>
             <Text style={styles.companyInfo}>Marcory Zone 4 — Immeuble Z4</Text>
-            <Text style={styles.companyInfo}>Abidjan, Côte d&apos;Ivoire</Text>
+            <Text style={styles.companyInfo}>Abidjan, Côte d'Ivoire</Text>
             <Text style={styles.companyInfo}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>N° {receipt.receipt_number}</Text>
-            <Text style={{ fontSize: 9, marginTop: 2 }}>Date : {formatDate(receipt.receipt_date)}</Text>
-          </View>
+          <Image style={styles.logoImage} src="/logoW.png" />
+        </View>
+
+        {/* Numéro et date */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+          <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>N° {receipt.receipt_number}</Text>
+          <Text style={{ fontSize: 9 }}>Date : {formatDate(receipt.receipt_date)}</Text>
         </View>
 
         {/* Title */}
@@ -261,14 +271,7 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
               <Text style={styles.value}>{receipt.superficie} m²</Text>
             </View>
           )}
-          {receipt.property_description && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Description :</Text>
-              <Text style={styles.value}>{receipt.property_description}</Text>
-            </View>
-          )}
 
-          {/* Lots table */}
           {lots.length > 0 && (
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -299,7 +302,7 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
           </View>
         </View>
 
-        {/* Amount paid - HIGHLIGHTED */}
+        {/* Amount paid */}
         <View style={styles.amountPaidBox}>
           <Text style={styles.amountPaidLabel}>Somme Versée</Text>
           <Text style={styles.amountPaidValue}>{formatCFA(receipt.amount_paid)}</Text>
