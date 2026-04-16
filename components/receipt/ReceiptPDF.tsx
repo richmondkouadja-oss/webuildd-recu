@@ -15,8 +15,7 @@ const WEBUILDD_RED = '#8B1A1A';
 const GRAY_DARK = '#1A1A1A';
 const GRAY_LIGHT = '#F5F5F5';
 
-// Logo WEBUILDD en base64
-const LOGO_BASE64 = 'data:image/png;base64,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';
+const LOGO_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACAAAAAJYCAYAAAD2CgbkAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAIABJREFUeJzs3Xmc7FV9J/zPF+69LAIuiIKouEREXFDEBXcEXHEDTHTMaCbGzJhMEuMYzR7jE5cxySQmecwyiRM10bhFH1lcUXDDBcV9xz2o0eCOgsCZP37Fw+XKcu/tqj5Vp9/v16te3U1Xd32qbtG3b57P+Z5qrQUAAAAAAAAAWG279A4AAAAAAAAAAKydAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAAAAAAAAAACAASgAAAAAAAAAAMAAFAAAAAAAAAAAYAAKAAAAAAAAAAAwAAUAAAAAAAAAABiAAgAAAAAAAAAADEABAAAAAAAAAAAGoAAAAAAAAAAAAANQAABGs1eSmyW57hq/z7Vm3+daV/L5myW5yZV87jqzz++zxgwAAAAAAACw3RQAgNE8OMk5SZ6xE1/7R0k+nOTAJE+cfZ8nXMl1P5vkQ1fyuSfPvvax23GbuyV5Y5KTktSOhAUAAAAAAICtbeodAGCJHJnkNpkKAOtl9yR3TXJxpp/JP17H2wYAAAAAAGAgCgAAlzk+yQ2TfCzJ0et0mz/IVDq4JBb/AQAAAAAAWANHAMDGdcckb0ryj1v9t+cn+dOtPv6H2XV+Y/b2r7b23IuSPH32/i5J/mWb6z479rldk7wyyVNmH29J8prZdW641fd74Oy/PXer7/myJE+bfbw5yatn1zkoyZ2TvCHJV5K8Y/b1W7t5klMzLeb/ryR7zv77C2ffY+/Zx6ckOXn2/m8l+fMkB+cnHZ7kdUk+keSZ23xuSy47PuAtmRb0r8xNk7wkySczjf1Pkr/N9Nhfkesn+d9JPp7kXZkeh';
 
 const styles = StyleSheet.create({
   page: {
@@ -74,6 +73,16 @@ const styles = StyleSheet.create({
     backgroundColor: GRAY_LIGHT,
     padding: 10,
     borderRadius: 4,
+  },
+motifBox: {
+  backgroundColor: GRAY_LIGHT,
+  padding: 10,
+  borderRadius: 4,
+},
+  motifText: {
+    fontSize: 11,
+    color: GRAY_DARK,
+    lineHeight: 1.6,
   },
   row: {
     flexDirection: 'row',
@@ -199,19 +208,26 @@ interface ReceiptPDFProps {
   lots: ReceiptLot[];
 }
 
+// Détecte si c'est un reçu de type "Motif" (pas de bien immobilier)
+function isMotifReceipt(receipt: Receipt): boolean {
+  return receipt.property_type === 'motif';
+}
+
 export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
   const amountDueColor = receipt.amount_due > 0 ? '#DC2626' : '#16A34A';
+  const isMotif = isMotifReceipt(receipt);
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+
         {/* Header avec logo */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.logo}>WEBUILDD FONCIER & IMMOBILIER</Text>
             <Text style={styles.companyInfo}>Marcory Zone 4 — Immeuble Z4</Text>
             <Text style={styles.companyInfo}>Abidjan, Côte d'Ivoire</Text>
-            <Text style={styles.companyInfo}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</Text>
+            <Text style={styles.companyInfo}>Tél : +225 07 16 00 00 76|07 13 33 33 69 |serviceclient@webuildd-ci.com</Text>
           </View>
           <Image style={styles.logoImage} src="/logoW.png" />
         </View>
@@ -244,63 +260,74 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
           </View>
         </View>
 
-        {/* Property */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bien Acquis</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Type :</Text>
-            <Text style={styles.value}>{receipt.property_type === 'terrain' ? 'Terrain' : 'Maison'}</Text>
+        {/* Section Motif OU Bien Acquis */}
+        {isMotif ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Motif</Text>
+            <View style={styles.motifBox}>
+              <Text style={styles.motifText}>{receipt.property_description}</Text>
+            </View>
           </View>
-          {receipt.lotissement_name && (
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Bien Acquis</Text>
             <View style={styles.row}>
-              <Text style={styles.label}>Lotissement :</Text>
-              <Text style={styles.value}>{receipt.lotissement_name}</Text>
+              <Text style={styles.label}>Type :</Text>
+              <Text style={styles.value}>{receipt.property_type === 'terrain' ? 'Terrain' : 'Maison'}</Text>
             </View>
-          )}
-          {receipt.localisation_quartier && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Localisation :</Text>
-              <Text style={styles.value}>
-                {[receipt.localisation_quartier, receipt.localisation_commune, receipt.localisation_ville].filter(Boolean).join(', ')}
-              </Text>
-            </View>
-          )}
-          {receipt.superficie && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Superficie :</Text>
-              <Text style={styles.value}>{receipt.superficie} m²</Text>
-            </View>
-          )}
-
-          {lots.length > 0 && (
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableCellHeader, { maxWidth: 40 }]}>Qté</Text>
-                <Text style={styles.tableCellHeader}>N° Îlot</Text>
-                <Text style={styles.tableCellHeader}>N° Lot</Text>
+            {receipt.lotissement_name && (
+              <View style={styles.row}>
+                <Text style={styles.label}>Lotissement :</Text>
+                <Text style={styles.value}>{receipt.lotissement_name}</Text>
               </View>
-              {lots.map((lot, i) => (
-                <View key={i} style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { maxWidth: 40 }]}>{i + 1}</Text>
-                  <Text style={styles.tableCell}>{lot.ilot_number}</Text>
-                  <Text style={styles.tableCell}>{lot.lot_number}</Text>
+            )}
+            {receipt.localisation_quartier && (
+              <View style={styles.row}>
+                <Text style={styles.label}>Localisation :</Text>
+                <Text style={styles.value}>
+                  {[receipt.localisation_quartier, receipt.localisation_commune, receipt.localisation_ville].filter(Boolean).join(', ')}
+                </Text>
+              </View>
+            )}
+            {receipt.superficie && (
+              <View style={styles.row}>
+                <Text style={styles.label}>Superficie :</Text>
+                <Text style={styles.value}>{receipt.superficie} m²</Text>
+              </View>
+            )}
+            {lots.length > 0 && (
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableCellHeader, { maxWidth: 40 }]}>Qté</Text>
+                  <Text style={styles.tableCellHeader}>N° Îlot</Text>
+                  <Text style={styles.tableCellHeader}>N° Lot</Text>
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+                {lots.map((lot, i) => (
+                  <View key={i} style={styles.tableRow}>
+                    <Text style={[styles.tableCell, { maxWidth: 40 }]}>{i + 1}</Text>
+                    <Text style={styles.tableCell}>{lot.ilot_number}</Text>
+                    <Text style={styles.tableCell}>{lot.lot_number}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
-        {/* Finance */}
-        <View style={styles.section}>
-          <View style={styles.financeLine}>
-            <Text>Prix unitaire :</Text>
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.unit_price)}</Text>
-          </View>
-          <View style={styles.financeLine}>
-            <Text>Montant total :</Text>
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.total_amount)}</Text>
-          </View>
-        </View>
+{/* Finance */}
+  {!isMotif && (
+<View style={styles.section}>
+    <View style={styles.financeLine}>
+      <Text>Prix unitaire :</Text>
+      <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.unit_price)}</Text>
+    </View>
+
+  <View style={styles.financeLine}>
+    <Text>Montant total :</Text>
+    <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.total_amount)}</Text>
+  </View>
+</View>
+  )}
 
         {/* Amount paid */}
         <View style={styles.amountPaidBox}>
@@ -333,6 +360,7 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
           <Text>WEBUILDD Foncier & Immobilier — DG : F.W. WEGUI</Text>
           <Text>Document officiel — Conservez ce reçu</Text>
         </View>
+
       </Page>
     </Document>
   );

@@ -34,51 +34,62 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  async function loadData() {
-    setLoading(true);
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const { data: allReceipts } = await supabase.from('receipts').select('*').order('created_at', { ascending: false });
-    const { data: clients } = await supabase.from('clients').select('id');
-    if (allReceipts) {
-      const active = allReceipts.filter(r => r.status !== 'annulé');
-      const totalEncaisse = active.reduce((s, r) => s + Number(r.amount_paid), 0);
-      const totalResteDu = active.reduce((s, r) => s + Number(r.amount_due), 0);
-      const totalMontant = totalEncaisse + totalResteDu;
-      const monthReceipts = active.filter(r => r.receipt_date >= startOfMonth);
-      const caMois = monthReceipts.reduce((s, r) => s + Number(r.amount_paid), 0);
-      setStats({
-        totalEncaisse, totalResteDu, totalTransactions: active.length, caMois,
-        recusMois: monthReceipts.length,
-        recusSoldes: allReceipts.filter(r => r.status === 'soldé').length,
-        recusPartiels: allReceipts.filter(r => r.status === 'partiel').length,
-        recusAnnules: allReceipts.filter(r => r.status === 'annulé').length,
-        totalClients: clients?.length || 0,
-        tauxRecouvrement: totalMontant > 0 ? Math.round((totalEncaisse / totalMontant) * 100) : 0,
-      });
-      const months = [];
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('fr-FR', { month: 'short' });
-        const mR = active.filter(r => r.receipt_date.startsWith(key));
-        months.push({
-          month: label,
-          encaisse: mR.reduce((s, r) => s + Number(r.amount_paid), 0),
-          resteDu: mR.reduce((s, r) => s + Number(r.amount_due), 0),
-        });
-      }
-      setMonthlyData(months);
-      const siteMap = new Map<string, number>();
-      active.forEach(r => {
-        const s = r.lotissement_name || 'Autre';
-        siteMap.set(s, (siteMap.get(s) || 0) + Number(r.amount_paid));
-      });
-      setSiteData(Array.from(siteMap.entries()).map(([name, value]) => ({ name, value })));
-      setRecentReceipts(allReceipts.slice(0, 6));
-    }
-    setLoading(false);
+async function loadData() {
+  setLoading(true);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+  const role = profileData?.role;
+
+  let query = supabase.from('receipts').select('*').order('created_at', { ascending: false });
+  if (role === 'comptable') {
+    query = query.eq('created_by', user?.id);
   }
+
+  const { data: allReceipts } = await query;
+  const { data: clients } = await supabase.from('clients').select('id');
+
+  if (allReceipts) {
+    const active = allReceipts.filter(r => r.status !== 'annulé');
+    const totalEncaisse = active.reduce((s, r) => s + Number(r.amount_paid), 0);
+    const totalResteDu = active.reduce((s, r) => s + Number(r.amount_due), 0);
+    const totalMontant = totalEncaisse + totalResteDu;
+    const monthReceipts = active.filter(r => r.receipt_date >= startOfMonth);
+    const caMois = monthReceipts.reduce((s, r) => s + Number(r.amount_paid), 0);
+    setStats({
+      totalEncaisse, totalResteDu, totalTransactions: active.length, caMois,
+      recusMois: monthReceipts.length,
+      recusSoldes: allReceipts.filter(r => r.status === 'soldé').length,
+      recusPartiels: allReceipts.filter(r => r.status === 'partiel').length,
+      recusAnnules: allReceipts.filter(r => r.status === 'annulé').length,
+      totalClients: clients?.length || 0,
+      tauxRecouvrement: totalMontant > 0 ? Math.round((totalEncaisse / totalMontant) * 100) : 0,
+    });
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('fr-FR', { month: 'short' });
+      const mR = active.filter(r => r.receipt_date.startsWith(key));
+      months.push({
+        month: label,
+        encaisse: mR.reduce((s, r) => s + Number(r.amount_paid), 0),
+        resteDu: mR.reduce((s, r) => s + Number(r.amount_due), 0),
+      });
+    }
+    setMonthlyData(months);
+    const siteMap = new Map<string, number>();
+    active.forEach(r => {
+      const s = r.lotissement_name || 'Autre';
+      siteMap.set(s, (siteMap.get(s) || 0) + Number(r.amount_paid));
+    });
+    setSiteData(Array.from(siteMap.entries()).map(([name, value]) => ({ name, value })));
+    setRecentReceipts(allReceipts.slice(0, 6));
+  }
+  setLoading(false);
+}
 
   const fmt = (v: number) =>
     v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` :
@@ -107,10 +118,18 @@ export default function DashboardPage() {
           </p>
         </div>
         <Link href="/recus/nouveau">
-          <button className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm shadow-red-200">
-            <PlusCircle className="h-4 w-4" />
-            Nouveau reçu
-          </button>
+         <button
+  className="flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+  style={{
+    backgroundColor: "var(--primary)",
+    boxShadow: "0 2px 8px rgba(170, 0, 0, 0.2)"
+  }}
+  onMouseOver={e => e.currentTarget.style.backgroundColor = "#880000"}
+  onMouseOut={e => e.currentTarget.style.backgroundColor = "var(--primary)"}
+>
+  <PlusCircle className="h-4 w-4" />
+  Nouveau reçu
+</button>
         </Link>
       </div>
 

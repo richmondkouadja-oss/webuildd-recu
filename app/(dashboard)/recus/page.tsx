@@ -33,12 +33,21 @@ export default function RecusPage() {
   useEffect(() => { loadReceipts(); }, []);
   useEffect(() => { setPage(1); }, [search, statusFilter]);
 
-  async function loadReceipts() {
-    setLoading(true);
-    const { data } = await supabase.from('receipts').select('*').order('created_at', { ascending: false });
-    if (data) setReceipts(data);
-    setLoading(false);
+async function loadReceipts() {
+  setLoading(true);
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+  const role = profileData?.role;
+
+  let query = supabase.from('receipts').select('*').order('created_at', { ascending: false });
+  if (role === 'comptable') {
+    query = query.eq('created_by', user?.id);
   }
+
+  const { data } = await query;
+  if (data) setReceipts(data);
+  setLoading(false);
+}
 
   const filtered = receipts.filter(r => {
     const matchSearch = !search ||
@@ -113,12 +122,18 @@ export default function RecusPage() {
           <h1 className="text-xl font-semibold text-slate-900">Reçus de paiement</h1>
           <p className="text-sm text-slate-400 mt-0.5">{receipts.length} reçu{receipts.length !== 1 ? 's' : ''} au total</p>
         </div>
-        <Link href="/recus/nouveau">
-          <button className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm shadow-red-200">
-            <PlusCircle className="h-4 w-4" />
-            Nouveau reçu
-          </button>
-        </Link>
+        <button
+  className="flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+  style={{
+    backgroundColor: "var(--primary)",
+    boxShadow: "0 2px 8px rgba(170, 0, 0, 0.2)"
+  }}
+  onMouseOver={e => e.currentTarget.style.backgroundColor = "#880000"}
+  onMouseOut={e => e.currentTarget.style.backgroundColor = "var(--primary)"}
+>
+  <PlusCircle className="h-4 w-4" />
+  Nouveau reçu
+</button>
       </div>
 
       {/* Quick stat cards */}

@@ -60,35 +60,52 @@
   --card-foreground: #0F172A;
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
-  --primary: #AB0303;
+
+  /* Rouge principal modifié */
+  --primary: #AA0000;
   --primary-foreground: #FFFFFF;
+
   --secondary: #F1F5F9;
   --secondary-foreground: #334155;
+
   --muted: #F1F5F9;
   --muted-foreground: #64748B;
+
   --accent: #FEF2F2;
   --accent-foreground: #DC2626;
-  --destructive: #AB0303;
+
+  /* Rouge destructif modifié */
+  --destructive: #AA0000;
+
   --border: #E2E8F0;
   --input: #E2E8F0;
-  --ring: #AB0303;
-  --chart-1: #AB0303;
+
+  /* Ring modifié */
+  --ring: #AA0000;
+
+  /* Charts */
+  --chart-1: #AA0000;
   --chart-2: #F59E0B;
   --chart-3: #059669;
   --chart-4: #3B82F6;
   --chart-5: #8B5CF6;
+
   --radius: 0.625rem;
-  /* White sidebar */
+
+  /* Sidebar */
   --sidebar: #FFFFFF;
   --sidebar-foreground: #0F172A;
-  --sidebar-primary: #AB0303;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #FEF2F2;
-  --sidebar-accent-foreground: #AB0303;
-  --sidebar-border: #F1F5F9;
-  --sidebar-ring: #AB0303;
-}
 
+  /* Sidebar primary modifié */
+  --sidebar-primary: #AA0000;
+  --sidebar-primary-foreground: #FFFFFF;
+
+  --sidebar-accent: #FEF2F2;
+  --sidebar-accent-foreground: #AA0000;
+
+  --sidebar-border: #F1F5F9;
+  --sidebar-ring: #AA0000;
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;

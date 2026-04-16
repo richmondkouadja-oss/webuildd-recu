@@ -92,10 +92,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Compose-style CTA */}
         <div className="px-4 pb-5">
           <Link href="/recus/nouveau" onClick={() => setSidebarOpen(false)}>
-            <button className="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-2xl py-3 transition-colors shadow-md shadow-red-200/60 text-sm">
-              <PlusCircle className="h-4.5 w-4.5 shrink-0" style={{ width: 18, height: 18 }} />
-              Nouveau reçu
-            </button>
+    <button
+  className="w-full flex items-center justify-center gap-2.5 text-white font-semibold rounded-2xl py-3 transition-colors shadow-md text-sm"
+  style={{
+    backgroundColor: "var(--primary)",
+    boxShadow: "0 4px 14px rgba(170, 0, 0, 0.25)"
+  }}
+  onMouseOver={e => e.currentTarget.style.backgroundColor = "#880000"}
+  onMouseOut={e => e.currentTarget.style.backgroundColor = "var(--primary)"}
+>
+  <PlusCircle className="h-4.5 w-4.5 shrink-0" style={{ width: 18, height: 18 }} />
+  Nouveau reçu
+</button>
           </Link>
         </div>
 

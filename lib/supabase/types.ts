@@ -1,5 +1,5 @@
 export type Role = 'super_admin' | 'comptable' | 'commercial' | 'lecteur';
-export type PropertyType = 'terrain' | 'maison';
+export type PropertyType = 'terrain' | 'maison' | 'motif';
 export type ReceiptStatus = 'partiel' | 'soldé' | 'annulé';
 export type LotStatus = 'disponible' | 'réservé' | 'vendu' | 'en_cours';
 export type ClientType = 'Particulier' | 'Entreprise' | 'Diaspora';
