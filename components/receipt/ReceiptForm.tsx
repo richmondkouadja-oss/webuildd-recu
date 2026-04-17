@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { createClient } from '@/lib/supabase/client';
@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
-  FileText, Eye, Save, CheckCircle, Download, MessageCircle, Mail, Printer, Search, UserPlus,
+  FileText, Eye, CheckCircle, Download, MessageCircle, Mail, Printer, Search, UserPlus,
 } from 'lucide-react';
 import type { Client, Site } from '@/lib/supabase/types';
 
@@ -43,7 +43,7 @@ export default function ReceiptForm() {
   const router = useRouter();
   const supabase = createClient();
 
-  const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ReceiptFormValues>({
+  const { register, handleSubmit, watch, setValue, control, trigger, formState: { errors } } = useForm<ReceiptFormValues>({
     defaultValues: {
       receipt_date: new Date().toISOString().split('T')[0],
       property_type: 'terrain',
@@ -79,7 +79,6 @@ export default function ReceiptForm() {
   const quantity = watch('quantity');
   const unitPriceRaw = watch('unit_price');
   const amountPaidRaw = watch('amount_paid');
-  const motif = watch('motif');
 
   const unitPrice = Number(String(unitPriceRaw).replace(/[^\d]/g, '')) || 0;
   const amountPaid = Number(String(amountPaidRaw).replace(/[^\d]/g, '')) || 0;
@@ -146,6 +145,27 @@ export default function ReceiptForm() {
     };
   }
 
+  async function goToStep(nextStep: number) {
+    let valid = true;
+    if (step === 1) {
+      valid = await trigger(['receipt_date']);
+    } else if (step === 2) {
+      if (!watch('client_name')) return;
+      valid = true;
+    } else if (step === 3) {
+      if (propertyType === 'motif') {
+        valid = await trigger(['motif']);
+      } else if (propertyType === 'terrain') {
+        valid = await trigger(['localisation_quartier', 'localisation_commune', 'localisation_ville']);
+      } else if (propertyType === 'maison') {
+        valid = await trigger(['property_description', 'localisation_quartier']);
+      }
+    } else if (step === 4) {
+      valid = await trigger(['unit_price', 'amount_paid']);
+    }
+    if (valid) setStep(nextStep);
+  }
+
   async function onSubmit(data: ReceiptFormValues) {
     setSaving(true);
     try {
@@ -158,7 +178,7 @@ export default function ReceiptForm() {
         client_name: data.client_name,
         client_phone: data.client_phone,
         client_email: data.client_email,
-      property_type: data.property_type === 'motif' ? 'motif' : data.property_type,
+        property_type: data.property_type,
         superficie: data.property_type === 'motif' ? null : (Number(String(data.superficie).replace(/[^\d]/g, '')) || null),
         localisation_quartier: data.property_type === 'motif' ? null : (data.localisation_quartier || null),
         localisation_commune: data.property_type === 'motif' ? null : (data.localisation_commune || null),
@@ -177,24 +197,15 @@ export default function ReceiptForm() {
 
       if (data.client_name) {
         const { data: existingClient } = await supabase
-          .from('clients')
-          .select('id')
-          .eq('full_name', data.client_name)
-          .single();
-        if (existingClient) {
-          Object.assign(receiptData, { client_id: existingClient.id });
-        }
+          .from('clients').select('id').eq('full_name', data.client_name).single();
+        if (existingClient) Object.assign(receiptData, { client_id: existingClient.id });
       }
 
       const { data: receipt, error } = await supabase
-        .from('receipts')
-        .insert(receiptData)
-        .select()
-        .single();
+        .from('receipts').insert(receiptData).select().single();
 
       if (error) throw error;
 
-      // Insert lots seulement si pas motif
       if (data.property_type !== 'motif' && lots.length > 0) {
         const lotRows = lots
           .filter(l => l.ilot_number || l.lot_number)
@@ -205,9 +216,7 @@ export default function ReceiptForm() {
             superficie: l.superficie || null,
             display_order: i + 1,
           }));
-        if (lotRows.length > 0) {
-          await supabase.from('receipt_lots').insert(lotRows);
-        }
+        if (lotRows.length > 0) await supabase.from('receipt_lots').insert(lotRows);
       }
 
       try {
@@ -221,15 +230,9 @@ export default function ReceiptForm() {
           await supabase.from('receipts').update({ pdf_url }).eq('id', receipt.id);
           receipt.pdf_url = pdf_url;
         }
-      } catch {
-        // non-blocking
-      }
+      } catch { /* non-blocking */ }
 
-      setSavedReceipt({
-        id: receipt.id,
-        receipt_number: receipt.receipt_number,
-        pdf_url: receipt.pdf_url || '',
-      });
+      setSavedReceipt({ id: receipt.id, receipt_number: receipt.receipt_number, pdf_url: receipt.pdf_url || '' });
       setShowSuccess(true);
     } catch (err) {
       console.error(err);
@@ -248,11 +251,7 @@ export default function ReceiptForm() {
       `WEBUILDD FONCIER & IMMOBILIER\nMarcory Zone 4 — Abidjan`
     );
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
-    supabase.from('receipt_sends').insert({
-      receipt_id: savedReceipt.id,
-      channel: 'whatsapp',
-      recipient: phone,
-    });
+    supabase.from('receipt_sends').insert({ receipt_id: savedReceipt.id, channel: 'whatsapp', recipient: phone });
   }
 
   async function sendEmail() {
@@ -264,12 +263,9 @@ export default function ReceiptForm() {
         body: JSON.stringify({ receiptId: savedReceipt.id }),
       });
       alert('Email envoyé avec succès');
-    } catch {
-      alert("Erreur lors de l'envoi de l'email");
-    }
+    } catch { alert("Erreur lors de l'envoi de l'email"); }
   }
 
-  // Steps : si type motif, on saute l'étape Bien
   const STEPS = propertyType === 'motif'
     ? ['En-tête', 'Client', 'Motif', 'Finance', 'Signatures']
     : ['En-tête', 'Client', 'Bien', 'Finance', 'Signatures'];
@@ -282,13 +278,11 @@ export default function ReceiptForm() {
           <button
             key={s}
             type="button"
-            onClick={() => setStep(i + 1)}
+            onClick={() => i + 1 < step && setStep(i + 1)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              step === i + 1
-                ? 'bg-[#8B1A1A] text-white'
-                : step > i + 1
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-500'
+              step === i + 1 ? 'bg-[#8B1A1A] text-white'
+              : step > i + 1 ? 'bg-green-100 text-green-800'
+              : 'bg-gray-100 text-gray-500'
             }`}
           >
             <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-white/20">
@@ -301,7 +295,7 @@ export default function ReceiptForm() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
-        {/* Section 1 — En-tête */}
+        {/* Étape 1 — En-tête */}
         {step === 1 && (
           <Card>
             <CardHeader>
@@ -316,88 +310,93 @@ export default function ReceiptForm() {
                 <Input disabled placeholder="Sera généré automatiquement" className="bg-gray-50" />
               </div>
               <div>
-                <Label htmlFor="receipt_date">Date du reçu</Label>
-                <Input type="date" {...register('receipt_date', { required: true })} />
+                <Label htmlFor="receipt_date">Date du reçu *</Label>
+                <Input type="date" {...register('receipt_date', { required: 'Date requise' })}
+                  className={errors.receipt_date ? 'border-red-500' : ''} />
+                {errors.receipt_date && <p className="text-xs text-red-600 mt-1">{errors.receipt_date.message}</p>}
               </div>
-              <Button type="button" onClick={() => setStep(2)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">
+              <Button type="button" onClick={() => goToStep(2)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">
                 Suivant
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* Section 2 — Client */}
+        {/* Étape 2 — Client */}
         {step === 2 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Informations client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Rechercher un client existant..."
-                    className="pl-9"
-                    value={clientSearch}
-                    onChange={(e) => {
-                      setClientSearch(e.target.value);
-                      setShowClientSearch(true);
-                    }}
-                    onFocus={() => setShowClientSearch(true)}
-                  />
-                  {showClientSearch && clientSearch && (
-                    <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto mt-1">
-                      {filteredClients.map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => selectClient(c)}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm"
-                        >
-                          <span className="font-medium">{c.full_name}</span>
-                          <span className="text-muted-foreground ml-2">{c.phone_whatsapp}</span>
-                        </button>
-                      ))}
-                      {filteredClients.length === 0 && (
-                        <p className="px-4 py-2 text-sm text-muted-foreground">Aucun client trouvé</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <Button type="button" variant="outline" onClick={() => setShowNewClient(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Nouveau
-                </Button>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="client_name">Nom et prénoms *</Label>
-                  <Input {...register('client_name', { required: 'Nom requis' })} />
-                  {errors.client_name && <p className="text-xs text-red-600 mt-1">{errors.client_name.message}</p>}
+              {watch('client_name') ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">{watch('client_name')}</p>
+                    <p className="text-xs text-green-600">{watch('client_phone')}</p>
+                    {watch('client_email') && <p className="text-xs text-green-600">{watch('client_email')}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setValue('client_name', ''); setValue('client_phone', ''); setValue('client_email', ''); }}
+                    className="text-xs text-red-500 hover:text-red-700 underline"
+                  >
+                    Changer
+                  </button>
                 </div>
-                <div>
-                  <Label htmlFor="client_phone">Téléphone WhatsApp *</Label>
-                  <Input {...register('client_phone', { required: 'Téléphone requis' })} placeholder="+225 XX XX XX XX XX" />
-                  {errors.client_phone && <p className="text-xs text-red-600 mt-1">{errors.client_phone.message}</p>}
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <p className="text-xs text-amber-700">Sélectionnez ou créez un client pour continuer</p>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Rechercher un client existant..."
+                      className="pl-9"
+                      value={clientSearch}
+                      onChange={(e) => { setClientSearch(e.target.value); setShowClientSearch(true); }}
+                      onFocus={() => setShowClientSearch(true)}
+                    />
+                    {showClientSearch && clientSearch && (
+                      <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto mt-1">
+                        {filteredClients.map(c => (
+                          <button key={c.id} type="button" onClick={() => selectClient(c)}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm">
+                            <span className="font-medium">{c.full_name}</span>
+                            <span className="text-muted-foreground ml-2">{c.phone_whatsapp}</span>
+                          </button>
+                        ))}
+                        {filteredClients.length === 0 && (
+                          <p className="px-4 py-2 text-sm text-muted-foreground">Aucun client trouvé</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setShowNewClient(true)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Créer un nouveau client
+                  </Button>
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="client_email">Email *</Label>
-                <Input type="email" {...register('client_email', { required: 'Email requis' })} />
-                {errors.client_email && <p className="text-xs text-red-600 mt-1">{errors.client_email.message}</p>}
-              </div>
+              )}
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>Précédent</Button>
-                <Button type="button" onClick={() => setStep(3)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
+                <Button
+                  type="button"
+                  onClick={() => goToStep(3)}
+                  disabled={!watch('client_name')}
+                  className="bg-[#8B1A1A] hover:bg-[#6B1414] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Suivant
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Section 3 — Bien ou Motif */}
+        {/* Étape 3 — Bien ou Motif */}
         {step === 3 && (
           <Card>
             <CardHeader>
@@ -406,73 +405,50 @@ export default function ReceiptForm() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-
-              {/* Toggle Terrain / Maison / Motif */}
               <div className="flex gap-2">
                 <Controller
                   control={control}
                   name="property_type"
                   render={({ field }) => (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => field.onChange('terrain')}
-                        className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
-                          field.value === 'terrain'
-                            ? 'border-[#8B1A1A] bg-[#8B1A1A] text-white'
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        Terrain
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => field.onChange('maison')}
-                        className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
-                          field.value === 'maison'
-                            ? 'border-[#8B1A1A] bg-[#8B1A1A] text-white'
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        Maison
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => field.onChange('motif')}
-                        className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
-                          field.value === 'motif'
-                            ? 'border-[#8B1A1A] bg-[#8B1A1A] text-white'
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        Motif
-                      </button>
+                      {(['terrain', 'maison', 'motif'] as const).map(type => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => field.onChange(type)}
+                          className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
+                            field.value === type
+                              ? 'border-[#8B1A1A] bg-[#8B1A1A] text-white'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </button>
+                      ))}
                     </>
                   )}
                 />
               </div>
 
-              {/* Type Motif — champ simple */}
               {propertyType === 'motif' && (
                 <div className="space-y-3">
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                     <p className="text-sm text-orange-700 font-medium mb-1">Reçu sans bien immobilier</p>
-                    <p className="text-xs text-orange-600">Ce reçu ne contiendra pas de section bien acquis ni de lots. Saisissez le motif du paiement.</p>
+                    <p className="text-xs text-orange-600">Ce reçu ne contiendra pas de section bien acquis ni de lots.</p>
                   </div>
                   <div>
                     <Label htmlFor="motif">Motif du paiement *</Label>
                     <Textarea
-                      {...register('motif', { required: propertyType === 'motif' ? 'Motif requis' : false })}
+                      {...register('motif', { required: 'Motif requis' })}
                       rows={4}
-                      placeholder="Ex: Frais de dossier, Réservation parcelle, Acompte frais d'étude..."
-                      className="mt-1"
+                      placeholder="Ex: Frais de dossier, Réservation parcelle..."
+                      className={`mt-1 ${errors.motif ? 'border-red-500' : ''}`}
                     />
                     {errors.motif && <p className="text-xs text-red-600 mt-1">{errors.motif.message}</p>}
                   </div>
                 </div>
               )}
 
-              {/* Type Terrain */}
               {propertyType === 'terrain' && (
                 <>
                   <div>
@@ -482,78 +458,46 @@ export default function ReceiptForm() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label>Quartier *</Label>
-                      <Input {...register('localisation_quartier')} />
+                      <Input {...register('localisation_quartier', { required: 'Quartier requis' })}
+                        className={errors.localisation_quartier ? 'border-red-500' : ''} />
+                      {errors.localisation_quartier && <p className="text-xs text-red-600 mt-1">{errors.localisation_quartier.message}</p>}
                     </div>
                     <div>
                       <Label>Commune *</Label>
-                      <Input {...register('localisation_commune')} />
+                      <Input {...register('localisation_commune', { required: 'Commune requise' })}
+                        className={errors.localisation_commune ? 'border-red-500' : ''} />
+                      {errors.localisation_commune && <p className="text-xs text-red-600 mt-1">{errors.localisation_commune.message}</p>}
                     </div>
                     <div>
                       <Label>Ville *</Label>
-                      <Input {...register('localisation_ville')} />
+                      <Input {...register('localisation_ville', { required: 'Ville requise' })}
+                        className={errors.localisation_ville ? 'border-red-500' : ''} />
+                      {errors.localisation_ville && <p className="text-xs text-red-600 mt-1">{errors.localisation_ville.message}</p>}
                     </div>
                   </div>
-                <div>
-  <Label>Nom du lotissement *</Label>
-  <Controller
-    control={control}
-    name="lotissement_name"
-    render={({ field }) => (
-      <Select
-        value={field.value === '__other' ? '__other' : field.value}
-        onValueChange={(v) => {
-          if (v === '__other') {
-            field.onChange('__other');
-          } else {
-            field.onChange(v);
-          }
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Sélectionner un site" />
-        </SelectTrigger>
-        <SelectContent>
-          {sites.map(s => (
-            <SelectItem key={s.id} value={s.name}>{s.name} — {s.city}</SelectItem>
-          ))}
-          <SelectItem value="__other">Autre (saisie libre)</SelectItem>
-        </SelectContent>
-      </Select>
-    )}
-  />
-  {watch('lotissement_name') === '__other' && (
-    <Input
-      className="mt-2"
-      placeholder="Nom du lotissement"
-      onBlur={(e) => setValue('lotissement_name', e.target.value)}
-    />
-  )}
-</div>
                   <div>
-                    <Label>Quantité</Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setValue('quantity', Math.max(1, quantity - 1))}
-                      >
-                        -
-                      </Button>
-                      <Input
-                        type="number"
-                        {...register('quantity', { valueAsNumber: true, min: 1, max: 20 })}
-                        className="w-20 text-center"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setValue('quantity', Math.min(20, quantity + 1))}
-                      >
-                        +
-                      </Button>
-                    </div>
+                    <Label>Nom du lotissement</Label>
+                    <Controller
+                      control={control}
+                      name="lotissement_name"
+                      render={({ field }) => (
+                        <Select value={field.value === '__other' ? '__other' : field.value} onValueChange={(v) => field.onChange(v)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un site" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sites.map(s => (
+                              <SelectItem key={s.id} value={s.name}>{s.name} — {s.city}</SelectItem>
+                            ))}
+                            <SelectItem value="__other">Autre (saisie libre)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {watch('lotissement_name') === '__other' && (
+                      <Input className="mt-2" placeholder="Nom du lotissement"
+                        onBlur={(e) => setValue('lotissement_name', e.target.value)} />
+                    )}
                   </div>
                   <div>
                     <Label>Tableau des lots (N° Îlot / N° Lot)</Label>
@@ -562,16 +506,21 @@ export default function ReceiptForm() {
                 </>
               )}
 
-              {/* Type Maison */}
               {propertyType === 'maison' && (
                 <>
                   <div>
                     <Label>Description *</Label>
-                    <Textarea {...register('property_description')} rows={3} placeholder="Description du bien" />
+                    <Textarea {...register('property_description', { required: 'Description requise' })}
+                      rows={3} placeholder="Description du bien"
+                      className={errors.property_description ? 'border-red-500' : ''} />
+                    {errors.property_description && <p className="text-xs text-red-600 mt-1">{errors.property_description.message}</p>}
                   </div>
                   <div>
                     <Label>Adresse *</Label>
-                    <Input {...register('localisation_quartier')} placeholder="Adresse complète" />
+                    <Input {...register('localisation_quartier', { required: 'Adresse requise' })}
+                      placeholder="Adresse complète"
+                      className={errors.localisation_quartier ? 'border-red-500' : ''} />
+                    {errors.localisation_quartier && <p className="text-xs text-red-600 mt-1">{errors.localisation_quartier.message}</p>}
                   </div>
                   <div>
                     <Label>Superficie bâtie (m²)</Label>
@@ -582,13 +531,13 @@ export default function ReceiptForm() {
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(2)}>Précédent</Button>
-                <Button type="button" onClick={() => setStep(4)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
+                <Button type="button" onClick={() => goToStep(4)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Section 4 — Finance */}
+        {/* Étape 4 — Finance */}
         {step === 4 && (
           <Card>
             <CardHeader>
@@ -600,14 +549,20 @@ export default function ReceiptForm() {
                 <Controller
                   control={control}
                   name="unit_price"
+                  rules={{
+                    required: 'Prix unitaire requis',
+                    validate: v => Number(String(v).replace(/[^\d]/g, '')) > 0 || 'Le prix doit être supérieur à 0'
+                  }}
                   render={({ field }) => (
                     <Input
                       value={field.value}
                       onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
                       placeholder="Ex: 6 000 000"
+                      className={errors.unit_price ? 'border-red-500' : ''}
                     />
                   )}
                 />
+                {errors.unit_price && <p className="text-xs text-red-600 mt-1">{errors.unit_price.message}</p>}
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
@@ -618,20 +573,22 @@ export default function ReceiptForm() {
                 )}
               </div>
 
-              <div className="border-3 border-[#8B1A1A] rounded-xl p-5 bg-red-50/50">
+              <div className="border-2 border-[#8B1A1A] rounded-xl p-5 bg-red-50/50">
                 <Label className="text-lg font-bold text-[#8B1A1A]">Somme versée (FCFA) *</Label>
                 <Controller
                   control={control}
                   name="amount_paid"
+                  rules={{ required: 'Somme versée requise' }}
                   render={({ field }) => (
                     <Input
                       value={field.value}
                       onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
                       placeholder="Ex: 3 000 000"
-                      className="text-2xl h-14 font-bold border-[#8B1A1A] mt-2"
+                      className={`text-2xl h-14 font-bold border-[#8B1A1A] mt-2 ${errors.amount_paid ? 'border-red-500' : ''}`}
                     />
                   )}
                 />
+                {errors.amount_paid && <p className="text-xs text-red-600 mt-1">{errors.amount_paid.message}</p>}
                 {amountPaid > totalAmount && (
                   <p className="text-sm text-red-600 mt-1">La somme versée dépasse le montant total</p>
                 )}
@@ -648,13 +605,13 @@ export default function ReceiptForm() {
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(3)}>Précédent</Button>
-                <Button type="button" onClick={() => setStep(5)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
+                <Button type="button" onClick={() => goToStep(5)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Section 5 — Signatures */}
+        {/* Étape 5 — Signatures */}
         {step === 5 && (
           <Card>
             <CardHeader>
@@ -673,7 +630,6 @@ export default function ReceiptForm() {
                   <p className="text-sm text-muted-foreground">WEBUILDD F&I</p>
                 </div>
               </div>
-
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(4)}>Précédent</Button>
               </div>
@@ -694,33 +650,17 @@ export default function ReceiptForm() {
         </div>
       </form>
 
-      {/* Preview modal */}
       {showPreview && (
-        <ReceiptPreview
-          data={getFormData()}
-          lots={lots}
-          open={showPreview}
-          onClose={() => setShowPreview(false)}
-        />
+        <ReceiptPreview data={getFormData()} lots={lots} open={showPreview} onClose={() => setShowPreview(false)} />
       )}
 
-      {/* New client modal */}
       <Dialog open={showNewClient} onOpenChange={setShowNewClient}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nouveau client</DialogTitle>
-          </DialogHeader>
-          <NewClientForm
-            onCreated={(client) => {
-              selectClient(client);
-              setShowNewClient(false);
-              loadClients();
-            }}
-          />
+          <DialogHeader><DialogTitle>Nouveau client</DialogTitle></DialogHeader>
+          <NewClientForm onCreated={(client) => { selectClient(client); setShowNewClient(false); loadClients(); }} />
         </DialogContent>
       </Dialog>
 
-      {/* Success modal */}
       <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -737,29 +677,20 @@ export default function ReceiptForm() {
               <div className="grid grid-cols-2 gap-2">
                 {savedReceipt.pdf_url && (
                   <a href={savedReceipt.pdf_url} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" className="w-full">
-                      <Download className="mr-2 h-4 w-4" />
-                      Télécharger
-                    </Button>
+                    <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" />Télécharger</Button>
                   </a>
                 )}
                 <Button variant="outline" className="w-full" onClick={sendWhatsApp}>
-                  <MessageCircle className="mr-2 h-4 w-4" />
-                  WhatsApp
+                  <MessageCircle className="mr-2 h-4 w-4" />WhatsApp
                 </Button>
                 <Button variant="outline" className="w-full" onClick={sendEmail}>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Email
+                  <Mail className="mr-2 h-4 w-4" />Email
                 </Button>
                 <Button variant="outline" className="w-full" onClick={() => window.print()}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Imprimer
+                  <Printer className="mr-2 h-4 w-4" />Imprimer
                 </Button>
               </div>
-              <Button
-                className="w-full bg-[#8B1A1A] hover:bg-[#6B1414]"
-                onClick={() => router.push('/recus')}
-              >
+              <Button className="w-full bg-[#8B1A1A] hover:bg-[#6B1414]" onClick={() => router.push('/recus')}>
                 Voir tous les reçus
               </Button>
             </div>
@@ -773,30 +704,16 @@ export default function ReceiptForm() {
 function NewClientForm({ onCreated }: { onCreated: (client: Client) => void }) {
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
-  const { register, handleSubmit } = useForm({
-    defaultValues: {
-      full_name: '',
-      phone_whatsapp: '',
-      email: '',
-      nationality: 'Ivoirienne',
-      client_type: 'Particulier',
-      address: '',
-    },
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: { full_name: '', phone_whatsapp: '', email: '', nationality: 'Ivoirienne', client_type: 'Particulier', address: '' },
   });
 
   async function onSubmit(data: Record<string, string>) {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { data: client, error } = await supabase
-      .from('clients')
-      .insert({ ...data, created_by: user?.id })
-      .select()
-      .single();
+    const { data: client, error } = await supabase.from('clients').insert({ ...data, created_by: user?.id }).select().single();
     setLoading(false);
-    if (error) {
-      alert('Erreur: ' + error.message);
-      return;
-    }
+    if (error) { alert('Erreur: ' + error.message); return; }
     onCreated(client);
   }
 
@@ -804,15 +721,16 @@ function NewClientForm({ onCreated }: { onCreated: (client: Client) => void }) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div>
         <Label>Nom complet *</Label>
-        <Input {...register('full_name', { required: true })} />
+        <Input {...register('full_name', { required: true })} className={errors.full_name ? 'border-red-500' : ''} />
       </div>
       <div>
         <Label>Téléphone WhatsApp *</Label>
-        <Input {...register('phone_whatsapp', { required: true })} placeholder="+225" />
+        <Input {...register('phone_whatsapp', { required: true })} placeholder="+225"
+          className={errors.phone_whatsapp ? 'border-red-500' : ''} />
       </div>
       <div>
-        <Label>Email *</Label>
-        <Input type="email" {...register('email', { required: true })} />
+        <Label>Email <span className="text-gray-400 text-xs">(optionnel)</span></Label>
+        <Input type="email" {...register('email')} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

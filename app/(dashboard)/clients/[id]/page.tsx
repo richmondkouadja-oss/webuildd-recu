@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { formatCFA, formatDate } from '@/lib/utils/formatters';
 import type { Client, Receipt } from '@/lib/supabase/types';
-import { ArrowLeft, Phone, Mail, Eye, FileText, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Eye, FileText, TrendingUp, Wallet, Pencil, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useForm } from 'react-hook-form';
 
 function clientInitials(name: string) {
   return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
@@ -21,25 +26,39 @@ const TYPE_STYLES: Record<string, string> = {
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClient();
-  const [client, setClient] = useState<Client | null>(null);
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+  const [client, setClient]       = useState<Client | null>(null);
+  const [receipts, setReceipts]   = useState<Receipt[]>([]);
+  const [isAdmin, setIsAdmin]     = useState(false);
+  const [showEdit, setShowEdit]   = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting]   = useState(false);
 
-  useEffect(() => {
-    loadClient();
-  }, []);
+  useEffect(() => { loadClient(); checkRole(); }, []);
+
+  async function checkRole() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+    setIsAdmin(data?.role === 'super_admin');
+  }
 
   async function loadClient() {
     const id = params.id as string;
     const { data } = await supabase.from('clients').select('*').eq('id', id).single();
-    if (data) setClient(data);
+    if (data) {
+      setClient(data);
+      const { data: recs } = await supabase
+        .from('receipts').select('*').eq('client_name', data.full_name).order('created_at', { ascending: false });
+      if (recs) setReceipts(recs);
+    }
+  }
 
-    const { data: recs } = await supabase
-      .from('receipts')
-      .select('*')
-      .eq('client_name', data?.full_name || '')
-      .order('created_at', { ascending: false });
-    if (recs) setReceipts(recs);
+  async function handleDelete() {
+    if (!client) return;
+    setDeleting(true);
+    await supabase.from('clients').delete().eq('id', client.id);
+    router.push('/clients');
   }
 
   if (!client) {
@@ -61,17 +80,15 @@ export default function ClientDetailPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => router.back()}
-          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
-        >
+        <button onClick={() => router.back()}
+          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ArrowLeft className="h-4 w-4 text-slate-600" />
         </button>
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
             <span className="text-sm font-bold text-indigo-700">{clientInitials(client.full_name)}</span>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-semibold text-slate-900">{client.full_name}</h1>
               <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full border ${TYPE_STYLES[client.client_type] || 'text-slate-600 bg-slate-50 border-slate-200'}`}>
@@ -82,6 +99,21 @@ export default function ClientDetailPage() {
               Client depuis le {formatDate(client.created_at)} · {client.nationality}
             </p>
           </div>
+          {/* Boutons admin */}
+          {isAdmin && (
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setShowEdit(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                <Pencil className="h-3.5 w-3.5" />
+                Modifier
+              </button>
+              <button onClick={() => setShowDelete(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                <Trash2 className="h-3.5 w-3.5" />
+                Supprimer
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -161,7 +193,7 @@ export default function ClientDetailPage() {
                   <td className="px-5 py-3.5">
                     <Link href={`/recus/${r.id}`}>
                       <button className="w-7 h-7 rounded-md bg-slate-100 hover:bg-indigo-100 flex items-center justify-center transition-colors">
-                        <Eye className="h-3.5 w-3.5 text-slate-500 hover:text-indigo-600" />
+                        <Eye className="h-3.5 w-3.5 text-slate-500" />
                       </button>
                     </Link>
                   </td>
@@ -178,6 +210,103 @@ export default function ClientDetailPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal Modifier */}
+      {showEdit && (
+        <EditClientDialog
+          client={client}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => { setShowEdit(false); loadClient(); }}
+        />
+      )}
+
+      {/* Modal Supprimer */}
+      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-slate-800">Supprimer ce client</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <div className="bg-red-50 border border-red-200/60 rounded-lg px-4 py-3">
+              <p className="text-xs text-red-700">
+                Vous allez supprimer <strong>{client.full_name}</strong>. Cette action est irréversible.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                onClick={() => setShowDelete(false)}>Annuler</button>
+              <button className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Suppression...' : 'Confirmer'}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function EditClientDialog({ client, onClose, onSaved }: { client: Client; onClose: () => void; onSaved: () => void }) {
+  const supabase = createClient();
+  const [saving, setSaving] = useState(false);
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: {
+      full_name: client.full_name,
+      phone_whatsapp: client.phone_whatsapp,
+      email: client.email || '',
+      nationality: client.nationality || '',
+      client_type: client.client_type,
+      address: client.address || '',
+    },
+  });
+
+  async function onSubmit(data: Record<string, string>) {
+    setSaving(true);
+    await supabase.from('clients').update(data).eq('id', client.id);
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Modifier le client</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 pt-1">
+          <div>
+            <Label>Nom complet *</Label>
+            <Input {...register('full_name', { required: true })} className={errors.full_name ? 'border-red-500' : ''} />
+          </div>
+          <div>
+            <Label>Téléphone WhatsApp *</Label>
+            <Input {...register('phone_whatsapp', { required: true })} className={errors.phone_whatsapp ? 'border-red-500' : ''} />
+          </div>
+          <div>
+            <Label>Email <span className="text-gray-400 text-xs">(optionnel)</span></Label>
+            <Input type="email" {...register('email')} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Nationalité</Label>
+              <Input {...register('nationality')} />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <select {...register('client_type')} className="w-full h-10 rounded-md border px-3 text-sm">
+                <option value="Particulier">Particulier</option>
+                <option value="Entreprise">Entreprise</option>
+                <option value="Diaspora">Diaspora</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+            <Button type="submit" className="bg-[#8B1A1A] hover:bg-[#6B1414]" disabled={saving}>
+              {saving ? 'Enregistrement...' : 'Enregistrer'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

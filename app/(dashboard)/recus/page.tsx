@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { formatCFA, formatDate, cleanPhoneNumber } from '@/lib/utils/formatters';
+import { formatCFA, formatDate } from '@/lib/utils/formatters';
 import type { Receipt } from '@/lib/supabase/types';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,43 +11,53 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  PlusCircle, Search, ArrowRight, MessageCircle,
-  Mail, Download, XCircle, FileText, ChevronLeft, ChevronRight,
+  PlusCircle, Search, ArrowRight,
+  Download, XCircle, FileText, ChevronLeft, ChevronRight,
   CheckCircle2, Clock, Ban,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 const PER_PAGE_OPTIONS = [5, 10, 20, 50];
 
 export default function RecusPage() {
-  const supabase = createClient();
-  const [receipts, setReceipts]     = useState<Receipt[]>([]);
-  const [search, setSearch]         = useState('');
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+  const router = useRouter();
+  const [receipts, setReceipts]         = useState<Receipt[]>([]);
+  const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading]       = useState(true);
-  const [selected, setSelected]     = useState<Set<string>>(new Set());
-  const [page, setPage]             = useState(1);
-  const [perPage, setPerPage]       = useState(10);
+  const [loading, setLoading]           = useState(true);
+  const [selected, setSelected]         = useState<Set<string>>(new Set());
+  const [page, setPage]                 = useState(1);
+  const [perPage, setPerPage]           = useState(10);
+  const [isAdmin, setIsAdmin]           = useState(false);
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; receiptId: string }>({ open: false, receiptId: '' });
   const [cancelReason, setCancelReason] = useState('');
 
-  useEffect(() => { loadReceipts(); }, []);
+  useEffect(() => { loadReceipts(); checkRole(); }, []);
   useEffect(() => { setPage(1); }, [search, statusFilter]);
 
-async function loadReceipts() {
-  setLoading(true);
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
-  const role = profileData?.role;
-
-  let query = supabase.from('receipts').select('*').order('created_at', { ascending: false });
-  if (role === 'comptable') {
-    query = query.eq('created_by', user?.id);
+  async function checkRole() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+    setIsAdmin(data?.role === 'super_admin');
   }
 
-  const { data } = await query;
-  if (data) setReceipts(data);
-  setLoading(false);
-}
+  async function loadReceipts() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+    const role = profileData?.role;
+
+    let query = supabase.from('receipts').select('*').order('created_at', { ascending: false });
+    if (role === 'comptable') {
+      query = query.eq('created_by', user?.id);
+    }
+
+    const { data } = await query;
+    if (data) setReceipts(data);
+    setLoading(false);
+  }
 
   const filtered = receipts.filter(r => {
     const matchSearch = !search ||
@@ -60,7 +70,6 @@ async function loadReceipts() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paginated  = filtered.slice((page - 1) * perPage, page * perPage);
 
-  // ── selection ──
   function toggleAll() {
     if (paginated.every(r => selected.has(r.id)) && paginated.length > 0) {
       setSelected(new Set());
@@ -75,7 +84,6 @@ async function loadReceipts() {
   }
   const allChecked = paginated.length > 0 && paginated.every(r => selected.has(r.id));
 
-  // ── actions ──
   async function cancelReceipt() {
     if (!cancelReason.trim()) return;
     await supabase.from('receipts').update({ status: 'annulé', cancel_reason: cancelReason }).eq('id', cancelDialog.receiptId);
@@ -84,33 +92,10 @@ async function loadReceipts() {
     loadReceipts();
   }
 
-  function sendWhatsApp(receipt: Receipt) {
-    const phone = cleanPhoneNumber(receipt.client_phone);
-    const message = encodeURIComponent(
-      `Bonjour, veuillez trouver ci-joint votre reçu de paiement N° ${receipt.receipt_number}.\n\n` +
-      `${receipt.pdf_url ? `Téléchargez votre reçu : ${receipt.pdf_url}\n\n` : ''}` +
-      `WEBUILDD FONCIER & IMMOBILIER\nMarcory Zone 4 — Abidjan`
-    );
-    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
-    supabase.from('receipt_sends').insert({ receipt_id: receipt.id, channel: 'whatsapp', recipient: phone });
-  }
-
-  async function sendEmail(receipt: Receipt) {
-    try {
-      await fetch('/api/recus/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiptId: receipt.id }),
-      });
-      alert('Email envoyé');
-    } catch { alert("Erreur lors de l'envoi"); }
-  }
-
-  // Quick counts
   const counts = {
-    solde:  receipts.filter(r => r.status === 'soldé').length,
-    partiel:receipts.filter(r => r.status === 'partiel').length,
-    annule: receipts.filter(r => r.status === 'annulé').length,
+    solde:   receipts.filter(r => r.status === 'soldé').length,
+    partiel: receipts.filter(r => r.status === 'partiel').length,
+    annule:  receipts.filter(r => r.status === 'annulé').length,
   };
 
   return (
@@ -122,18 +107,12 @@ async function loadReceipts() {
           <h1 className="text-xl font-semibold text-slate-900">Reçus de paiement</h1>
           <p className="text-sm text-slate-400 mt-0.5">{receipts.length} reçu{receipts.length !== 1 ? 's' : ''} au total</p>
         </div>
-        <button
-  className="flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
-  style={{
-    backgroundColor: "var(--primary)",
-    boxShadow: "0 2px 8px rgba(170, 0, 0, 0.2)"
-  }}
-  onMouseOver={e => e.currentTarget.style.backgroundColor = "#880000"}
-  onMouseOut={e => e.currentTarget.style.backgroundColor = "var(--primary)"}
->
-  <PlusCircle className="h-4 w-4" />
-  Nouveau reçu
-</button>
+        <Link href="/recus/nouveau">
+          <button className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm shadow-red-200">
+            <PlusCircle className="h-4 w-4" />
+            Nouveau reçu
+          </button>
+        </Link>
       </div>
 
       {/* Quick stat cards */}
@@ -188,12 +167,8 @@ async function loadReceipts() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/60">
                 <th className="w-12 px-4 py-3.5">
-                  <input
-                    type="checkbox"
-                    checked={allChecked}
-                    onChange={toggleAll}
-                    className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer"
-                  />
+                  <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                    className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer" />
                 </th>
                 <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">N° Reçu</th>
                 <th className="text-left text-[11px] font-medium text-slate-400 uppercase tracking-wide px-4 py-3.5">Client</th>
@@ -208,74 +183,59 @@ async function loadReceipts() {
               {paginated.map((r) => {
                 const isSelected = selected.has(r.id);
                 return (
-                  <tr
-                    key={r.id}
-                    className={`table-row-hover border-b border-slate-100 last:border-0 ${isSelected ? 'bg-red-50/20' : ''}`}
-                  >
-                    {/* Checkbox */}
+                  <tr key={r.id}
+                    className={`table-row-hover border-b border-slate-100 last:border-0 ${isSelected ? 'bg-red-50/20' : ''}`}>
+
                     <td className="w-12 px-4 py-3.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleOne(r.id)}
-                        className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer"
-                      />
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)}
+                        className="w-4 h-4 rounded border-slate-300 accent-red-600 cursor-pointer" />
                     </td>
 
-                    {/* N° */}
                     <td className="px-4 py-3.5">
                       <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{r.receipt_number}</span>
                     </td>
 
-                    {/* Client + date */}
                     <td className="px-4 py-3.5">
                       <p className="font-medium text-slate-800 leading-none">{r.client_name}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{formatDate(r.receipt_date)}</p>
                     </td>
 
-                    {/* Site */}
                     <td className="px-4 py-3.5 text-slate-500">{r.lotissement_name || '—'}</td>
 
-                    {/* Versé */}
                     <td className="px-4 py-3.5 text-right font-semibold text-emerald-600">{formatCFA(r.amount_paid)}</td>
 
-                    {/* Reste */}
                     <td className={`px-4 py-3.5 text-right font-semibold ${r.amount_due > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
                       {formatCFA(r.amount_due)}
                     </td>
 
-                    {/* Statut */}
                     <td className="px-4 py-3.5">
-                      {r.status === 'soldé'  && <span className="status-badge-solde">Soldé</span>}
-                      {r.status === 'partiel' && <span className="status-badge-partiel">Partiel</span>}
-                      {r.status === 'annulé' && <span className="status-badge-annule">Annulé</span>}
+                      {r.status === 'soldé'   && <span className="status-badge-solde">Soldé</span>}
+                      {r.status === 'partiel'  && <span className="status-badge-partiel">Partiel</span>}
+                      {r.status === 'annulé'  && <span className="status-badge-annule">Annulé</span>}
                     </td>
 
                     {/* Actions */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button onClick={() => sendWhatsApp(r)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 flex items-center justify-center transition-colors" title="WhatsApp">
-                          <MessageCircle className="h-3.5 w-3.5 text-slate-400" />
-                        </button>
-                        <button onClick={() => sendEmail(r)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-50 flex items-center justify-center transition-colors" title="Email">
-                          <Mail className="h-3.5 w-3.5 text-slate-400" />
-                        </button>
+                        {/* Annuler — admin seulement */}
+                        {isAdmin && r.status !== 'annulé' && (
+                          <button
+                            onClick={() => setCancelDialog({ open: true, receiptId: r.id })}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors"
+                            title="Annuler"
+                          >
+                            <XCircle className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
+                          </button>
+                        )}
+                        {/* Télécharger PDF */}
                         {r.pdf_url && (
                           <a href={r.pdf_url} target="_blank" rel="noopener noreferrer">
-                            <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Télécharger">
+                            <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Télécharger PDF">
                               <Download className="h-3.5 w-3.5 text-slate-400" />
                             </button>
                           </a>
                         )}
-                        {r.status !== 'annulé' && (
-                          <button
-                            onClick={() => setCancelDialog({ open: true, receiptId: r.id })}
-                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-500 flex items-center justify-center transition-colors"
-                            title="Annuler"
-                          >
-                            <XCircle className="h-3.5 w-3.5 text-slate-400" />
-                          </button>
-                        )}
+                        {/* Voir */}
                         <Link href={`/recus/${r.id}`}>
                           <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors" title="Voir">
                             <ArrowRight className="h-3.5 w-3.5 text-slate-400 hover:text-red-600" />
@@ -324,18 +284,12 @@ async function loadReceipts() {
               {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} sur {filtered.length}
             </span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 <ChevronLeft className="h-3.5 w-3.5 text-slate-500" />
               </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="w-7 h-7 rounded-md border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
               </button>
             </div>

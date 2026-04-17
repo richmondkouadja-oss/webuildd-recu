@@ -227,7 +227,7 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
             <Text style={styles.logo}>WEBUILDD FONCIER & IMMOBILIER</Text>
             <Text style={styles.companyInfo}>Marcory Zone 4 — Immeuble Z4</Text>
             <Text style={styles.companyInfo}>Abidjan, Côte d'Ivoire</Text>
-            <Text style={styles.companyInfo}>Tél : +225 07 16 00 00 76|07 13 33 33 69 |serviceclient@webuildd-ci.com</Text>
+            <Text style={styles.companyInfo}>Tél : +225 07 16 00 00 76 | 07 13 33 33 69 | serviceclient@webuildd-ci.com</Text>
           </View>
           <Image style={styles.logoImage} src="/logoW.png" />
         </View>
@@ -298,13 +298,13 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
             {lots.length > 0 && (
               <View style={styles.table}>
                 <View style={styles.tableHeader}>
-                  <Text style={[styles.tableCellHeader, { maxWidth: 40 }]}>Qté</Text>
+                  {/* <Text style={[styles.tableCellHeader, { maxWidth: 40 }]}>Nb</Text> */}
                   <Text style={styles.tableCellHeader}>N° Îlot</Text>
                   <Text style={styles.tableCellHeader}>N° Lot</Text>
                 </View>
                 {lots.map((lot, i) => (
                   <View key={i} style={styles.tableRow}>
-                    <Text style={[styles.tableCell, { maxWidth: 40 }]}>{i + 1}</Text>
+                    {/* <Text style={[styles.tableCell, { maxWidth: 40 }]}>{i + 1}</Text> */}
                     <Text style={styles.tableCell}>{lot.ilot_number}</Text>
                     <Text style={styles.tableCell}>{lot.lot_number}</Text>
                   </View>
