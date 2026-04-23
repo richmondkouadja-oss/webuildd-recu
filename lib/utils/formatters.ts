@@ -3,7 +3,7 @@ export function formatCFA(amount: number): string {
     style: 'decimal',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount) + ' FCFA';
+  }).format(amount).replace(/\u202f/g, ' ').replace(/\u00a0/g, ' ') + ' FCFA';
 }
 
 export function formatDate(date: string | Date): string {

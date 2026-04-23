@@ -86,7 +86,7 @@ export default function ReceiptPreview({ data, lots, open, onClose }: ReceiptPre
             <p>Prix unitaire : {formatCFA(data.unit_price as number)}</p>
             <p>Montant total : <strong>{formatCFA(data.total_amount as number)}</strong></p>
 
-            <div className="bg-[#8B1A1A] text-white rounded-lg p-4 text-center">
+            <div className="bg-gray-100 text-white rounded-lg p-4 text-center">
               <p className="text-xs uppercase tracking-wide opacity-80">Somme versée</p>
               <p className="text-2xl font-bold">{formatCFA(data.amount_paid as number)}</p>
             </div>

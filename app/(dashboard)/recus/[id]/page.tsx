@@ -83,8 +83,8 @@ export default function ReceiptDetailPage() {
         <div className="print-only items-center justify-between border-b pb-4 mb-2">
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#8B1A1A', margin: 0 }}>WEBUILDD FONCIER & IMMOBILIER</h2>
-            <p style={{ fontSize: '11px', color: '#6B7280', margin: '2px 0 0' }}>Marcory Zone 4 — Immeuble Z4, Abidjan, Côte d'Ivoire</p>
-            <p style={{ fontSize: '11px', color: '#6B7280', margin: '2px 0 0' }}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</p>
+            <p style={{ fontSize: '11px', color: '#F3F4F6', margin: '2px 0 0' }}>Marcory Zone 4 — Immeuble Z4, Abidjan, Côte d'Ivoire</p>
+            <p style={{ fontSize: '11px', color: '#F3F4F6', margin: '2px 0 0' }}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</p>
           </div>
           <img src="/logoW.png" alt="WEBUILDD" style={{ height: '55px', objectFit: 'contain' }} />
         </div>
@@ -139,7 +139,7 @@ export default function ReceiptDetailPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <div>
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Reçu {receipt.receipt_number}</div>
-              <div style={{ fontSize: '12px', color: '#6B7280' }}>Créé le {formatDate(receipt.created_at)}</div>
+              <div style={{ fontSize: '12px', color: '#F3F4F6' }}>Créé le {formatDate(receipt.created_at)}</div>
             </div>
             <div>
               {receipt.status === 'soldé' && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px' }}>Soldé</span>}
@@ -273,11 +273,11 @@ export default function ReceiptDetailPage() {
             </div>
 
             {/* Somme versée */}
-            <div style={{ backgroundColor: '#8B1A1A', borderRadius: '12px', padding: '16px 20px', textAlign: 'center', marginTop: '8px' }}>
-              <p style={{ fontSize: '11px', fontWeight: '500', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Somme versée</p>
-              <p style={{ fontSize: '28px', fontWeight: 'bold', color: 'white' }}>{formatCFA(receipt.amount_paid)}</p>
+            <div style={{ backgroundColor: '#F3F4F6', borderRadius: '12px', padding: '16px 20px', textAlign: 'center', marginTop: '8px' }}>
+              <p style={{ fontSize: '11px', fontWeight: '500', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Somme versée</p>
+              <p style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827' }}>{formatCFA(receipt.amount_paid)}</p>
               {receipt.amount_paid_words && (
-                <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'rgba(255,255,255,0.6)', marginTop: '6px' }}>{receipt.amount_paid_words}</p>
+                <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#6B7280', marginTop: '6px' }}>{receipt.amount_paid_words}</p>
               )}
             </div>
 
@@ -299,12 +299,12 @@ export default function ReceiptDetailPage() {
           <div style={{ width: '40%', textAlign: 'center' }}>
             <p style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '40px' }}>Signature du Client</p>
             <div style={{ borderBottom: '1px solid #9CA3AF', marginBottom: '4px' }} />
-            <p style={{ fontSize: '10px', color: '#6B7280' }}>{receipt.client_name}</p>
+            <p style={{ fontSize: '10px', color: '#F3F4F6' }}>{receipt.client_name}</p>
           </div>
           <div style={{ width: '40%', textAlign: 'center' }}>
             <p style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '40px' }}>Signature du Service Comptable</p>
             <div style={{ borderBottom: '1px solid #9CA3AF', marginBottom: '4px' }} />
-            <p style={{ fontSize: '10px', color: '#6B7280' }}>WEBUILDD F&I</p>
+            <p style={{ fontSize: '10px', color: '#F3F4F6' }}>WEBUILDD F&I</p>
           </div>
         </div>
 

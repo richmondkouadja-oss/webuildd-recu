@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   },
   companyInfo: {
     fontSize: 8,
-    color: '#6B7280',
+    color: '#1A1A1A',
     marginTop: 2,
   },
   logoImage: {
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 9,
     fontFamily: 'Helvetica-Bold',
-    color: '#6B7280',
+    color: '#1A1A1A',
     textTransform: 'uppercase',
     marginBottom: 6,
     letterSpacing: 1,
@@ -91,7 +91,7 @@ motifBox: {
   label: {
     width: 80,
     fontSize: 9,
-    color: '#6B7280',
+    color: '#1A1A1A',
   },
   value: {
     flex: 1,
@@ -130,23 +130,24 @@ motifBox: {
     marginBottom: 4,
   },
   amountPaidBox: {
-    backgroundColor: WEBUILDD_RED,
+    backgroundColor: '#F3F4F6',
     borderRadius: 6,
     padding: 14,
     alignItems: 'center',
     marginVertical: 10,
+    border: '1px solid #E5E7EB',
   },
   amountPaidLabel: {
     fontSize: 9,
-    color: '#FFFFFF',
-    opacity: 0.8,
+    color: '#1A1A1A',
+    opacity: 1,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
   amountPaidValue: {
     fontSize: 22,
     fontFamily: 'Helvetica-Bold',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     marginTop: 4,
   },
   amountWords: {
@@ -187,7 +188,7 @@ motifBox: {
   },
   signatureName: {
     fontSize: 8,
-    color: '#6B7280',
+    color: '#1A1A1A',
   },
   footer: {
     position: 'absolute',
@@ -196,7 +197,7 @@ motifBox: {
     right: 40,
     textAlign: 'center',
     fontSize: 7,
-    color: '#9CA3AF',
+    color: '#1A1A1A',
     borderTopWidth: 0.5,
     borderTopColor: '#E5E7EB',
     paddingTop: 8,
