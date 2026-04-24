@@ -315,20 +315,21 @@ export default function ReceiptPDF({ receipt, lots }: ReceiptPDFProps) {
           </View>
         )}
 
-{/* Finance */}
-  {!isMotif && (
+{/* Finance — affiché pour tous les types */}
 <View style={styles.section}>
     <View style={styles.financeLine}>
       <Text>Prix unitaire :</Text>
       <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.unit_price)}</Text>
     </View>
-
-  <View style={styles.financeLine}>
-    <Text>Montant total :</Text>
-    <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.total_amount)}</Text>
-  </View>
+    <View style={styles.financeLine}>
+      <Text>Quantité :</Text>
+      <Text style={{ fontFamily: 'Helvetica-Bold' }}>{receipt.quantity || 1}</Text>
+    </View>
+    <View style={styles.financeLine}>
+      <Text>Montant total :</Text>
+      <Text style={{ fontFamily: 'Helvetica-Bold' }}>{formatCFA(receipt.total_amount)}</Text>
+    </View>
 </View>
-  )}
 
         {/* Amount paid */}
         <View style={styles.amountPaidBox}>
