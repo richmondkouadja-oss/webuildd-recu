@@ -166,7 +166,10 @@ motifBox: {
   signatures: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 40,
+    position: 'absolute',
+    bottom: 60,
+    left: 40,
+    right: 40,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
