@@ -71,6 +71,7 @@ export default function ReceiptForm() {
   const [showNewClient, setShowNewClient] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [savedReceipt, setSavedReceipt] = useState<{ id: string; receipt_number: string; pdf_url: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
@@ -114,7 +115,8 @@ export default function ReceiptForm() {
   function selectClient(client: Client) {
     setValue('client_name', client.full_name);
     setValue('client_phone', client.phone_whatsapp);
-    setValue('client_email', client.email);
+    setValue('client_email', client.email || '');
+    setSelectedClientId(client.id);
     setShowClientSearch(false);
     setClientSearch('');
   }
@@ -195,7 +197,9 @@ export default function ReceiptForm() {
         created_by: user?.id || null,
       };
 
-      if (data.client_name) {
+      if (selectedClientId) {
+        Object.assign(receiptData, { client_id: selectedClientId });
+      } else if (data.client_name) {
         const { data: existingClient } = await supabase
           .from('clients').select('id').eq('full_name', data.client_name).single();
         if (existingClient) Object.assign(receiptData, { client_id: existingClient.id });
@@ -339,7 +343,7 @@ export default function ReceiptForm() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setValue('client_name', ''); setValue('client_phone', ''); setValue('client_email', ''); }}
+                    onClick={() => { setValue('client_name', ''); setValue('client_phone', ''); setValue('client_email', ''); setSelectedClientId(null); }}
                     className="text-xs text-red-500 hover:text-red-700 underline"
                   >
                     Changer
@@ -657,7 +661,7 @@ export default function ReceiptForm() {
       <Dialog open={showNewClient} onOpenChange={setShowNewClient}>
         <DialogContent>
           <DialogHeader><DialogTitle>Nouveau client</DialogTitle></DialogHeader>
-          <NewClientForm onCreated={(client) => { selectClient(client); setShowNewClient(false); loadClients(); }} />
+          <NewClientForm onCreated={(client) => { selectClient(client); setSelectedClientId(client.id); setShowNewClient(false); loadClients(); }} />
         </DialogContent>
       </Dialog>
 

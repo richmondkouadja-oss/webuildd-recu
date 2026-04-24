@@ -19,7 +19,8 @@ export default function ReceiptDetailPage() {
   const router = useRouter();
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [receipt, setReceipt] = useState<any | null>(null);
+  const [client, setClient] = useState<any | null>(null);
   const [lots, setLots] = useState<ReceiptLot[]>([]);
   const loadedRef = useRef(false);
 
@@ -31,12 +32,28 @@ export default function ReceiptDetailPage() {
 
   async function loadReceipt() {
     const id = params.id as string;
-    const { data } = await supabase.from('receipts').select('*').eq('id', id).single();
-    if (data) setReceipt(data);
+
+    // Join avec clients pour avoir les données à jour
+    const { data } = await supabase
+      .from('receipts')
+      .select('*, clients(id, full_name, phone_whatsapp, email)')
+      .eq('id', id)
+      .single();
+
+    if (data) {
+      setReceipt(data);
+      setClient(data.clients || null);
+    }
+
     const { data: lotData } = await supabase
       .from('receipt_lots').select('*').eq('receipt_id', id).order('display_order');
     if (lotData) setLots(lotData);
   }
+
+  // Helpers — toujours lire depuis client en priorité
+  const clientName  = client?.full_name  || receipt?.client_name  || '—';
+  const clientPhone = client?.phone_whatsapp || receipt?.client_phone || '—';
+  const clientEmail = client?.email      || receipt?.client_email  || '—';
 
   if (!receipt) {
     return (
@@ -56,6 +73,9 @@ export default function ReceiptDetailPage() {
   };
   const sc = statusConfig[receipt.status as keyof typeof statusConfig];
 
+  // Passer les données client à jour au PDF
+  const receiptForPDF = { ...receipt, client_name: clientName, client_phone: clientPhone, client_email: clientEmail };
+
   return (
     <>
       <style>{`
@@ -68,8 +88,6 @@ export default function ReceiptDetailPage() {
         }
         .print-only { display: none; }
         .print-block { display: none; }
-
-        /* Signature section — pousse vers le bas */
         .signature-section {
           margin-top: 40px;
           padding-top: 16px;
@@ -79,17 +97,17 @@ export default function ReceiptDetailPage() {
 
       <div className="max-w-3xl mx-auto space-y-5">
 
-        {/* ===== HEADER IMPRESSION ===== */}
+        {/* HEADER IMPRESSION */}
         <div className="print-only items-center justify-between border-b pb-4 mb-2">
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#8B1A1A', margin: 0 }}>WEBUILDD FONCIER & IMMOBILIER</h2>
-            <p style={{ fontSize: '11px', color: '#F3F4F6', margin: '2px 0 0' }}>Marcory Zone 4 — Immeuble Z4, Abidjan, Côte d'Ivoire</p>
-            <p style={{ fontSize: '11px', color: '#F3F4F6', margin: '2px 0 0' }}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</p>
+            <p style={{ fontSize: '11px', color: '#374151', margin: '2px 0 0' }}>Marcory Zone 4 — Immeuble Z4, Abidjan, Côte d'Ivoire</p>
+            <p style={{ fontSize: '11px', color: '#374151', margin: '2px 0 0' }}>Tél : +225 07 07 07 07 07 | info@webuildd.ci</p>
           </div>
           <img src="/logoW.png" alt="WEBUILDD" style={{ height: '55px', objectFit: 'contain' }} />
         </div>
 
-        {/* ===== HEADER ECRAN ===== */}
+        {/* HEADER ECRAN */}
         <div className="no-print flex items-center gap-3 flex-wrap">
           <button
             onClick={() => router.back()}
@@ -106,7 +124,7 @@ export default function ReceiptDetailPage() {
           </div>
 
           <PDFDownloadLink
-            document={<ReceiptPDF receipt={receipt} lots={lots} />}
+            document={<ReceiptPDF receipt={receiptForPDF} lots={lots} />}
             fileName={`recu-${receipt.receipt_number}.pdf`}
           >
             {({ loading: pdfLoading }) => (
@@ -120,18 +138,10 @@ export default function ReceiptDetailPage() {
             )}
           </PDFDownloadLink>
 
-          {/* <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 bg-[#8B1A1A] hover:bg-[#6B1414] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <Printer className="h-4 w-4" />
-            Imprimer
-          </button> */}
-
           <img src="/logoW.png" alt="WEBUILDD" className="h-10 object-contain hidden sm:block" />
         </div>
 
-        {/* ===== TITRE IMPRESSION ===== */}
+        {/* TITRE IMPRESSION */}
         <div className="print-block">
           <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', color: '#8B1A1A', margin: '8px 0' }}>
             REÇU DE PAIEMENT
@@ -139,10 +149,10 @@ export default function ReceiptDetailPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <div>
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Reçu {receipt.receipt_number}</div>
-              <div style={{ fontSize: '12px', color: '#F3F4F6' }}>Créé le {formatDate(receipt.created_at)}</div>
+              <div style={{ fontSize: '12px', color: '#374151' }}>Créé le {formatDate(receipt.created_at)}</div>
             </div>
             <div>
-              {receipt.status === 'soldé' && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px' }}>Soldé</span>}
+              {receipt.status === 'soldé'  && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px' }}>Soldé</span>}
               {receipt.status === 'partiel' && <span style={{ background: '#ffedd5', color: '#9a3412', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px' }}>Partiel</span>}
               {receipt.status === 'annulé' && <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px' }}>Annulé</span>}
             </div>
@@ -157,7 +167,7 @@ export default function ReceiptDetailPage() {
           </div>
         )}
 
-        {/* ===== INFO GRID ===== */}
+        {/* INFO GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
@@ -169,15 +179,15 @@ export default function ReceiptDetailPage() {
             <div className="px-5 py-4 space-y-2.5">
               <div>
                 <p className="text-xs text-gray-400">Nom</p>
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">{receipt.client_name}</p>
+                <p className="text-sm font-semibold text-gray-800 mt-0.5">{clientName}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Téléphone</p>
-                <p className="text-sm text-gray-700 mt-0.5">{receipt.client_phone}</p>
+                <p className="text-sm text-gray-700 mt-0.5">{clientPhone}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Email</p>
-                <p className="text-sm text-gray-700 mt-0.5">{receipt.client_email || '—'}</p>
+                <p className="text-sm text-gray-700 mt-0.5">{clientEmail !== '—' ? clientEmail : '—'}</p>
               </div>
             </div>
           </div>
@@ -192,7 +202,9 @@ export default function ReceiptDetailPage() {
             <div className="px-5 py-4 space-y-2.5">
               <div>
                 <p className="text-xs text-gray-400">Type</p>
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">{receipt.property_type === 'terrain' ? 'Terrain' : 'Maison'}</p>
+                <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                  {receipt.property_type === 'terrain' ? 'Terrain' : receipt.property_type === 'maison' ? 'Maison' : receipt.property_description || receipt.property_type}
+                </p>
               </div>
               {receipt.lotissement_name && (
                 <div>
@@ -218,7 +230,7 @@ export default function ReceiptDetailPage() {
           </div>
         </div>
 
-        {/* ===== LOTS ===== */}
+        {/* LOTS */}
         {lots.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
@@ -250,7 +262,7 @@ export default function ReceiptDetailPage() {
           </div>
         )}
 
-        {/* ===== FINANCIER ===== */}
+        {/* FINANCIER */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-50 flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-red-50 flex items-center justify-center no-print">
@@ -294,21 +306,21 @@ export default function ReceiptDetailPage() {
           </div>
         </div>
 
-        {/* ===== SIGNATURES (visible à l'impression, 40px de marge) ===== */}
+        {/* SIGNATURES IMPRESSION */}
         <div className="print-only signature-section" style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <div style={{ width: '40%', textAlign: 'center' }}>
             <p style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '40px' }}>Signature du Client</p>
             <div style={{ borderBottom: '1px solid #9CA3AF', marginBottom: '4px' }} />
-            <p style={{ fontSize: '10px', color: '#F3F4F6' }}>{receipt.client_name}</p>
+            <p style={{ fontSize: '10px', color: '#374151' }}>{clientName}</p>
           </div>
           <div style={{ width: '40%', textAlign: 'center' }}>
             <p style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '40px' }}>Signature du Service Comptable</p>
             <div style={{ borderBottom: '1px solid #9CA3AF', marginBottom: '4px' }} />
-            <p style={{ fontSize: '10px', color: '#F3F4F6' }}>WEBUILDD F&I</p>
+            <p style={{ fontSize: '10px', color: '#374151' }}>WEBUILDD F&I</p>
           </div>
         </div>
 
-        {/* ===== FOOTER IMPRESSION ===== */}
+        {/* FOOTER IMPRESSION */}
         <div className="print-block" style={{ textAlign: 'center', fontSize: '10px', color: '#9CA3AF', borderTop: '0.5px solid #E5E7EB', paddingTop: '8px', marginTop: '8px' }}>
           <p>WEBUILDD Foncier & Immobilier — DG : F.W. WEGUI | Document officiel — Conservez ce reçu</p>
         </div>

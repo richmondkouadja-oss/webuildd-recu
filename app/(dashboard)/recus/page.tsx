@@ -23,7 +23,7 @@ export default function RecusPage() {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   const router = useRouter();
-  const [receipts, setReceipts]         = useState<Receipt[]>([]);
+  const [receipts, setReceipts]         = useState<any[]>([]);
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading]           = useState(true);
@@ -49,7 +49,12 @@ export default function RecusPage() {
     const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
     const role = profileData?.role;
 
-    let query = supabase.from('receipts').select('*').order('created_at', { ascending: false });
+    // Join avec clients pour avoir les données à jour
+    let query = supabase
+      .from('receipts')
+      .select('*, clients(id, full_name, phone_whatsapp, email)')
+      .order('created_at', { ascending: false });
+
     if (role === 'comptable') {
       query = query.eq('created_by', user?.id);
     }
@@ -59,10 +64,14 @@ export default function RecusPage() {
     setLoading(false);
   }
 
+  // Nom client toujours depuis la relation clients
+  const getClientName = (r: any) => r.clients?.full_name || r.client_name || '—';
+
   const filtered = receipts.filter(r => {
+    const clientName = getClientName(r);
     const matchSearch = !search ||
       r.receipt_number.toLowerCase().includes(search.toLowerCase()) ||
-      r.client_name.toLowerCase().includes(search.toLowerCase());
+      clientName.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -196,7 +205,7 @@ export default function RecusPage() {
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <p className="font-medium text-slate-800 leading-none">{r.client_name}</p>
+                      <p className="font-medium text-slate-800 leading-none">{getClientName(r)}</p>
                       <p className="text-xs text-slate-400 mt-0.5">{formatDate(r.receipt_date)}</p>
                     </td>
 
@@ -214,10 +223,8 @@ export default function RecusPage() {
                       {r.status === 'annulé'  && <span className="status-badge-annule">Annulé</span>}
                     </td>
 
-                    {/* Actions */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {/* Annuler — admin seulement */}
                         {isAdmin && r.status !== 'annulé' && (
                           <button
                             onClick={() => setCancelDialog({ open: true, receiptId: r.id })}
@@ -227,7 +234,6 @@ export default function RecusPage() {
                             <XCircle className="h-3.5 w-3.5 text-slate-400 hover:text-red-500" />
                           </button>
                         )}
-                        {/* Télécharger PDF */}
                         {r.pdf_url && (
                           <a href={r.pdf_url} target="_blank" rel="noopener noreferrer">
                             <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Télécharger PDF">
@@ -235,7 +241,6 @@ export default function RecusPage() {
                             </button>
                           </a>
                         )}
-                        {/* Voir */}
                         <Link href={`/recus/${r.id}`}>
                           <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors" title="Voir">
                             <ArrowRight className="h-3.5 w-3.5 text-slate-400 hover:text-red-600" />
@@ -266,7 +271,6 @@ export default function RecusPage() {
           </table>
         </div>
 
-        {/* Pagination */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-end gap-4 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
             <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -297,7 +301,6 @@ export default function RecusPage() {
         )}
       </div>
 
-      {/* Cancel dialog */}
       <Dialog open={cancelDialog.open} onOpenChange={(v) => setCancelDialog({ ...cancelDialog, open: v })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
