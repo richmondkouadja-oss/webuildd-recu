@@ -92,15 +92,24 @@ export default function ReceiptForm() {
     loadSites();
   }, []);
 
+  // Sync quantité avec lots pour terrain
   useEffect(() => {
-    if (quantity > lots.length) {
+    if (propertyType === 'terrain') {
+      const filledLots = lots.filter(l => l.ilot_number || l.lot_number).length;
+      const count = Math.max(filledLots, lots.length, 1);
+      setValue('quantity', count);
+    }
+  }, [lots, propertyType]);
+
+  useEffect(() => {
+    if (propertyType !== 'terrain' && quantity > lots.length) {
       const newLots = [...lots];
       for (let i = lots.length; i < quantity; i++) {
         newLots.push({ ilot_number: '', lot_number: '' });
       }
       setLots(newLots);
     }
-  }, [quantity]);
+  }, [quantity, propertyType]);
 
   async function loadClients() {
     const { data } = await supabase.from('clients').select('*').order('full_name');
@@ -187,7 +196,7 @@ export default function ReceiptForm() {
         localisation_ville: data.property_type === 'motif' ? null : (data.localisation_ville || null),
         lotissement_name: data.property_type === 'motif' ? null : (data.lotissement_name || null),
         property_description: data.property_type === 'motif' ? data.motif : (data.property_description || null),
-        quantity: data.property_type === 'motif' ? 1 : (quantity || 1),
+        quantity: quantity || 1,
         unit_price: unitPrice,
         total_amount: totalAmount,
         amount_paid: amountPaid,
@@ -434,7 +443,7 @@ export default function ReceiptForm() {
                 />
               </div>
 
-              {propertyType === 'motif' && (
+              {propertyType !== 'terrain' && (
                 <div className="space-y-3">
                   <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                     <p className="text-sm text-orange-700 font-medium mb-1">Reçu sans bien immobilier</p>
@@ -548,6 +557,44 @@ export default function ReceiptForm() {
               <CardTitle className="text-lg">Éléments financiers</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {propertyType !== 'terrain' && (
+                <div>
+                  <Label>Quantité</Label>
+                  <Controller
+                    control={control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                      /*   min={1} */
+                        value={field.value}
+                        onChange={(e) => field.onChange(Number(e.target.value) )}
+                        placeholder="1"
+                      />
+                    )}
+                  />
+                </div>
+              )}
+
+            {/*   {propertyType !== 'terrain' && (
+                <div>
+                  <Label>Quantité</Label>
+                  <Controller
+                    control={control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        min={1}
+                        value={field.value}
+                        onChange={(e) => field.onChange(Number(e.target.value) || 1)}
+                        placeholder="1"
+                      />
+                    )}
+                  />
+                </div>
+              )} */}
+
               <div>
                 <Label>Prix unitaire (FCFA) *</Label>
                 <Controller
