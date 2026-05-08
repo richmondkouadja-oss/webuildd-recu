@@ -1,41 +1,129 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { formatCFA, formatDate } from '@/lib/utils/formatters';
-import type { Client, Receipt } from '@/lib/supabase/types';
-import { ArrowLeft, Phone, Mail, Eye, FileText, TrendingUp, Wallet, Pencil, Trash2 } from 'lucide-react';
+import { numberToWordsFr } from '@/lib/utils/numberToWords';
+import type { Client } from '@/lib/supabase/types';
+import {
+  ArrowLeft, Phone, Mail, FileText, TrendingUp, Wallet,
+  Pencil, Trash2, PlusCircle, X, ChevronDown, ChevronUp,
+  CheckCircle2, Clock, Banknote, MapPin, Calendar, Download,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
+import ReceiptForm from '@/components/receipt/ReceiptForm';
+import ReceiptPDF from '@/components/receipt/ReceiptPDF';
+import PaymentPDF from '@/components/receipt/PaymentPDF';
+
+// PDFDownloadLink chargé côté client uniquement (pas de SSR)
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink),
+  { ssr: false, loading: () => (
+    <button className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center" disabled>
+      <Download className="h-3.5 w-3.5 text-slate-300" />
+    </button>
+  )},
+);
 
 function clientInitials(name: string) {
   return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
 }
 
+function formatNumberInput(v: string) {
+  const n = v.replace(/[^\d]/g, '');
+  return n ? new Intl.NumberFormat('fr-FR').format(Number(n)) : '';
+}
+
 const TYPE_STYLES: Record<string, string> = {
   Particulier: 'text-indigo-700 bg-indigo-50 border-indigo-200/60',
-  Entreprise:  'text-cyan-700 bg-cyan-50 border-cyan-200/60',
-  Diaspora:    'text-violet-700 bg-violet-50 border-violet-200/60',
+  Entreprise:  'text-cyan-700   bg-cyan-50   border-cyan-200/60',
+  Diaspora:    'text-violet-700 bg-violet-50  border-violet-200/60',
+};
+
+const METHOD_LABELS: Record<string, string> = {
+  espèces: 'Espèces', virement: 'Virement', chèque: 'Chèque',
+  mobile_money: 'Mobile Money', autre: 'Autre',
+};
+
+const METHOD_COLORS: Record<string, string> = {
+  espèces:      'bg-emerald-50 text-emerald-700 border-emerald-200',
+  virement:     'bg-blue-50    text-blue-700    border-blue-200',
+  chèque:       'bg-violet-50  text-violet-700  border-violet-200',
+  mobile_money: 'bg-orange-50  text-orange-700  border-orange-200',
+  autre:        'bg-slate-50   text-slate-600   border-slate-200',
+};
+
+type Payment = {
+  id: string; receipt_id: string; payment_date: string;
+  amount: number; amount_words: string; payment_method: string;
+  reference: string | null; notes: string | null; created_at: string;
+};
+
+type ReceiptWithPayments = {
+  id: string; receipt_number: string; receipt_date: string;
+  property_type: string; lotissement_name: string | null;
+  localisation_quartier: string | null; property_description: string | null;
+  total_amount: number; amount_paid: number; amount_due: number;
+  status: string; receipt_lots: any[];
+  payments: Payment[];
 };
 
 export default function ClientDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params  = useParams();
+  const router  = useRouter();
   const supabaseRef = useRef(createClient());
-  const supabase = supabaseRef.current;
-  const [client, setClient]       = useState<Client | null>(null);
-  const [receipts, setReceipts]   = useState<Receipt[]>([]);
-  const [isAdmin, setIsAdmin]     = useState(false);
-  const [showEdit, setShowEdit]   = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const [deleting, setDeleting]   = useState(false);
+  const supabase    = supabaseRef.current;
 
-  useEffect(() => { loadClient(); checkRole(); }, []);
+  const [client, setClient]             = useState<Client | null>(null);
+  const [receipts, setReceipts]         = useState<ReceiptWithPayments[]>([]);
+  const [isAdmin, setIsAdmin]           = useState(false);
+  const [showEdit, setShowEdit]         = useState(false);
+  const [showDelete, setShowDelete]     = useState(false);
+  const [deleting, setDeleting]         = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showNewReceipt, setShowNewReceipt] = useState(false);
+  const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
+  const [addPaymentFor, setAddPaymentFor]     = useState<ReceiptWithPayments | null>(null);
+
+  const loadAll = useCallback(async () => {
+    const id = params.id as string;
+    const { data: clientData } = await supabase.from('clients').select('*').eq('id', id).single();
+    if (!clientData) return;
+    setClient(clientData);
+
+    const { data: byId } = await supabase
+      .from('receipts').select('*, receipt_lots(*)')
+      .eq('client_id', id).order('created_at', { ascending: false });
+
+    const { data: byName } = await supabase
+      .from('receipts').select('*, receipt_lots(*)')
+      .eq('client_name', clientData.full_name).order('created_at', { ascending: false });
+
+    const combined = [...(byId || []), ...(byName || [])];
+    const unique   = Array.from(new Map(combined.map(r => [r.id, r])).values());
+    unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    const withPayments: ReceiptWithPayments[] = await Promise.all(
+      unique.map(async (r) => {
+        const { data: pays } = await supabase
+          .from('payments').select('*').eq('receipt_id', r.id)
+          .order('payment_date', { ascending: true });
+        return { ...r, payments: pays || [] };
+      })
+    );
+    setReceipts(withPayments);
+  }, [params.id]);
+
+  useEffect(() => { loadAll(); checkRole(); }, []);
 
   async function checkRole() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -43,22 +131,30 @@ export default function ClientDetailPage() {
     setIsAdmin(data?.role === 'super_admin');
   }
 
-  async function loadClient() {
-    const id = params.id as string;
-    const { data } = await supabase.from('clients').select('*').eq('id', id).single();
-    if (data) {
-      setClient(data);
-      const { data: recs } = await supabase
-        .from('receipts').select('*').eq('client_name', data.full_name).order('created_at', { ascending: false });
-      if (recs) setReceipts(recs);
-    }
-  }
-
   async function handleDelete() {
     if (!client) return;
     setDeleting(true);
-    await supabase.from('clients').delete().eq('id', client.id);
-    router.push('/clients');
+    try {
+      // Récupérer tous les reçus du client
+      const { data: clientReceipts } = await supabase
+        .from('receipts').select('id').eq('client_id', client.id);
+
+      // Supprimer les versements de chaque reçu (cascade via SQL mais on s'assure)
+      if (clientReceipts && clientReceipts.length > 0) {
+        const receiptIds = clientReceipts.map(r => r.id);
+        await supabase.from('payments').delete().in('receipt_id', receiptIds);
+        await supabase.from('receipt_lots').delete().in('receipt_id', receiptIds);
+        await supabase.from('receipt_sends').delete().in('receipt_id', receiptIds);
+        await supabase.from('receipts').delete().in('id', receiptIds);
+      }
+
+      // Supprimer le client
+      await supabase.from('clients').delete().eq('id', client.id);
+      router.push('/clients');
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+    }
   }
 
   if (!client) {
@@ -72,13 +168,16 @@ export default function ClientDetailPage() {
     );
   }
 
-  const totalPaid = receipts.reduce((s, r) => s + Number(r.amount_paid), 0);
-  const totalDue  = receipts.reduce((s, r) => s + Number(r.amount_due), 0);
+  const activeReceipts = receipts.filter(r => r.status !== 'annulé');
+  const totalPaid      = activeReceipts.reduce((s, r) => s + Number(r.amount_paid), 0);
+  const totalDue       = activeReceipts.reduce((s, r) => s + Number(r.amount_due), 0);
+  const totalAmount    = activeReceipts.reduce((s, r) => s + Number(r.total_amount), 0);
+  const countSolde     = activeReceipts.filter(r => r.status === 'soldé').length;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="max-w-4xl mx-auto space-y-5">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center gap-4">
         <button onClick={() => router.back()}
           className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
@@ -99,145 +198,454 @@ export default function ClientDetailPage() {
               Client depuis le {formatDate(client.created_at)} · {client.nationality}
             </p>
           </div>
-          {/* Boutons admin */}
-          {isAdmin && (
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => setShowEdit(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                <Pencil className="h-3.5 w-3.5" />
-                Modifier
-              </button>
-              <button onClick={() => setShowDelete(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-                <Trash2 className="h-3.5 w-3.5" />
-                Supprimer
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setShowNewReceipt(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm">
+              <PlusCircle className="h-3.5 w-3.5" />
+              Nouveau bien
+            </button>
+            {isAdmin && (
+              <>
+                <button onClick={() => setShowEdit(true)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                  <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                </button>
+                <button onClick={() => setShowDelete(true)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-600 transition-colors">
+                  <Trash2 className="h-3.5 w-3.5 text-slate-500" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Contact cards */}
+      {/* ── Contact ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-4 py-3.5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-            <Phone className="h-4 w-4 text-indigo-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-400">Téléphone</p>
-            <p className="text-sm font-medium text-slate-800 truncate mt-0.5">{client.phone_whatsapp}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-4 py-3.5 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-            <Mail className="h-4 w-4 text-indigo-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-400">Email</p>
-            <p className="text-sm font-medium text-slate-800 truncate mt-0.5">{client.email || '—'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Reçus émis', value: receipts.length, icon: FileText, bg: 'bg-indigo-50', color: 'text-indigo-600', val: 'text-indigo-700', accent: 'border-l-indigo-500' },
-          { label: 'Total versé', value: formatCFA(totalPaid), icon: Wallet, bg: 'bg-emerald-50', color: 'text-emerald-600', val: 'text-emerald-700', accent: 'border-l-emerald-500' },
-          { label: 'Reste dû', value: formatCFA(totalDue), icon: TrendingUp, bg: totalDue > 0 ? 'bg-red-50' : 'bg-emerald-50', color: totalDue > 0 ? 'text-red-500' : 'text-emerald-600', val: totalDue > 0 ? 'text-red-600' : 'text-emerald-700', accent: totalDue > 0 ? 'border-l-red-500' : 'border-l-emerald-500' },
-        ].map((kpi, i) => (
-          <div key={i} className={`bg-white rounded-xl border border-slate-200/80 shadow-sm border-l-4 ${kpi.accent} px-4 py-3.5 flex items-center gap-3`}>
-            <div className={`w-9 h-9 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-              <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
+          { icon: Phone, label: 'Téléphone', value: client.phone_whatsapp },
+          { icon: Mail,  label: 'Email',     value: client.email || '—' },
+        ].map((c, i) => (
+          <div key={i} className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-4 py-3.5 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+              <c.icon className="h-4 w-4 text-indigo-600" />
             </div>
-            <div>
-              <p className={`text-base font-bold ${kpi.val}`}>{kpi.value}</p>
-              <p className="text-xs text-slate-400">{kpi.label}</p>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">{c.label}</p>
+              <p className="text-sm font-medium text-slate-800 truncate mt-0.5">{c.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Receipt history */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-800">Historique des reçus</h3>
-          <p className="text-xs text-slate-400 mt-0.5">{receipts.length} transaction{receipts.length > 1 ? 's' : ''}</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70">
-                <th className="text-left text-xs font-medium text-slate-400 px-5 py-3.5">N° Reçu</th>
-                <th className="text-left text-xs font-medium text-slate-400 px-5 py-3.5">Date</th>
-                <th className="text-right text-xs font-medium text-slate-400 px-5 py-3.5">Total</th>
-                <th className="text-right text-xs font-medium text-slate-400 px-5 py-3.5">Versé</th>
-                <th className="text-left text-xs font-medium text-slate-400 px-5 py-3.5">Statut</th>
-                <th className="px-5 py-3.5 w-16" />
-              </tr>
-            </thead>
-            <tbody>
-              {receipts.map((r, i) => (
-                <tr key={r.id} className={`table-row-hover ${i < receipts.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                  <td className="px-5 py-3.5">
-                    <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{r.receipt_number}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-600">{formatDate(r.receipt_date)}</td>
-                  <td className="px-5 py-3.5 text-right text-slate-600">{formatCFA(r.total_amount)}</td>
-                  <td className="px-5 py-3.5 text-right font-semibold text-emerald-600">{formatCFA(r.amount_paid)}</td>
-                  <td className="px-5 py-3.5">
-                    {r.status === 'soldé'  && <span className="status-badge-solde">Soldé</span>}
-                    {r.status === 'partiel' && <span className="status-badge-partiel">Partiel</span>}
-                    {r.status === 'annulé' && <span className="status-badge-annule">Annulé</span>}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <Link href={`/recus/${r.id}`}>
-                      <button className="w-7 h-7 rounded-md bg-slate-100 hover:bg-indigo-100 flex items-center justify-center transition-colors">
-                        <Eye className="h-3.5 w-3.5 text-slate-500" />
-                      </button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {receipts.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-400">
-                    Aucun reçu pour ce client
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Biens',      value: activeReceipts.length,   icon: FileText,    bg: 'bg-indigo-50',  ic: 'text-indigo-500',  vc: 'text-indigo-700'  },
+          { label: 'Total versé',value: formatCFA(totalPaid),     icon: Wallet,      bg: 'bg-emerald-50', ic: 'text-emerald-500', vc: 'text-emerald-700' },
+          { label: 'Reste dû',   value: formatCFA(totalDue),      icon: TrendingUp,  bg: totalDue > 0 ? 'bg-red-50' : 'bg-emerald-50', ic: totalDue > 0 ? 'text-red-500' : 'text-emerald-500', vc: totalDue > 0 ? 'text-red-600' : 'text-emerald-700' },
+          { label: 'Soldés',     value: `${countSolde}/${activeReceipts.length}`, icon: CheckCircle2, bg: 'bg-amber-50', ic: 'text-amber-500', vc: 'text-amber-700' },
+        ].map((k, i) => (
+          <div key={i} className={`${k.bg} rounded-2xl p-4 shadow-sm flex items-center gap-3`}>
+            <div className="w-9 h-9 rounded-xl bg-white/60 flex items-center justify-center shrink-0">
+              <k.icon className={`h-4 w-4 ${k.ic}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-slate-500 truncate">{k.label}</p>
+              <p className={`text-sm font-bold ${k.vc} truncate`}>{k.value}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Modal Modifier */}
+      {/* ── Barre de progression globale ── */}
+      {totalAmount > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-5 py-4">
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-xs font-semibold text-slate-600">Progression globale</p>
+            <p className="text-xs font-bold text-slate-700">
+              {Math.round((totalPaid / totalAmount) * 100)}% · {formatCFA(totalAmount)} total
+            </p>
+          </div>
+          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-[#8B1A1A] to-red-400 rounded-full transition-all duration-700"
+              style={{ width: `${Math.min(100, (totalPaid / totalAmount) * 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1.5 text-xs">
+            <span className="text-emerald-600 font-medium">{formatCFA(totalPaid)} versés</span>
+            <span className={`font-medium ${totalDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {totalDue > 0 ? `${formatCFA(totalDue)} restants` : '✓ Tout soldé'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Liste des biens ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">Biens & versements</h2>
+          {activeReceipts.length > 0 && (
+            <span className="text-xs text-slate-400">{activeReceipts.length} bien{activeReceipts.length > 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        {receipts.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-5 py-14 text-center">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+              <FileText className="h-6 w-6 text-slate-300" />
+            </div>
+            <p className="text-sm text-slate-400 mb-3">Aucun bien enregistré pour ce client</p>
+            <button onClick={() => setShowNewReceipt(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700">
+              <PlusCircle className="h-3.5 w-3.5" />
+              Enregistrer le premier bien
+            </button>
+          </div>
+        ) : (
+          receipts.map((receipt) => {
+            const pct        = receipt.total_amount > 0 ? Math.min(100, Math.round((receipt.amount_paid / receipt.total_amount) * 100)) : 0;
+            const isExpanded = expandedReceipt === receipt.id;
+            const bienLabel  = receipt.property_type === 'motif'
+              ? (receipt.property_description || 'Motif')
+              : receipt.lotissement_name || receipt.localisation_quartier || receipt.property_type;
+            const isSolde    = receipt.status === 'soldé';
+            const isAnnule   = receipt.status === 'annulé';
+
+            return (
+              <div key={receipt.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${
+                isAnnule ? 'border-slate-200/50 opacity-60' : isSolde ? 'border-emerald-200/60' : 'border-slate-200/80'
+              }`}>
+
+                {/* ── En-tête bien ── */}
+                <div className="px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    {/* Icône */}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      isSolde ? 'bg-emerald-100' : isAnnule ? 'bg-slate-100' : 'bg-amber-50'
+                    }`}>
+                      <MapPin className={`h-5 w-5 ${isSolde ? 'text-emerald-600' : isAnnule ? 'text-slate-400' : 'text-amber-600'}`} />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {/* Titre + statut */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-slate-800">{bienLabel || receipt.property_type}</p>
+                        {isSolde && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 className="h-3 w-3" /> Soldé
+                          </span>
+                        )}
+                        {receipt.status === 'partiel' && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            <Clock className="h-3 w-3" /> En cours · {receipt.payments.length} versement{receipt.payments.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {isAnnule && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600">Annulé</span>
+                        )}
+                      </div>
+
+                      {/* Meta */}
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                        <span className="text-xs text-slate-400 font-mono">{receipt.receipt_number}</span>
+                        <span className="text-xs text-slate-400">{formatDate(receipt.receipt_date)}</span>
+                        {receipt.receipt_lots?.length > 0 && (
+                          <span className="text-xs text-slate-400">{receipt.receipt_lots.length} lot{receipt.receipt_lots.length > 1 ? 's' : ''}</span>
+                        )}
+                      </div>
+
+                      {/* Barre de progression par bien */}
+                      {!isAnnule && (
+                        <div className="mt-3 space-y-1">
+                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? 'bg-emerald-500' : 'bg-[#8B1A1A]'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-emerald-600 font-medium">{formatCFA(receipt.amount_paid)}</span>
+                            <span className={`font-medium ${receipt.amount_due > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                              {receipt.amount_due > 0 ? `reste ${formatCFA(receipt.amount_due)}` : '✓'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Montant + actions */}
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <p className="text-sm font-bold text-slate-700">{formatCFA(receipt.total_amount)}</p>
+                      <div className="flex items-center gap-1.5">
+
+                        {/* Bouton voir le reçu */}
+                        <Link href={`/recus/${receipt.id}`}>
+                          <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Voir le reçu">
+                            <FileText className="h-3.5 w-3.5 text-slate-500" />
+                          </button>
+                        </Link>
+
+                        {/* Bouton télécharger PDF */}
+                        <PDFDownloadLink
+                          document={
+                            <ReceiptPDF
+                              receipt={{
+                                ...receipt,
+                                client_name:  client.full_name,
+                                client_phone: client.phone_whatsapp,
+                                client_email: client.email || '',
+                              } as any}
+                              lots={receipt.receipt_lots || []}
+                            />
+                          }
+                          fileName={`recu-${receipt.receipt_number}.pdf`}
+                        >
+                          {({ loading: pdfLoading }) => (
+                            <button
+                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors"
+                              title={pdfLoading ? 'Génération...' : 'Télécharger le PDF'}
+                              disabled={pdfLoading}
+                            >
+                              <Download className={`h-3.5 w-3.5 ${pdfLoading ? 'text-slate-300' : 'text-slate-500 hover:text-[#8B1A1A]'}`} />
+                            </button>
+                          )}
+                        </PDFDownloadLink>
+                        {!isAnnule && (
+                          <button
+                            onClick={() => setExpandedReceipt(isExpanded ? null : receipt.id)}
+                            className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+                          >
+                            {isExpanded
+                              ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" />
+                              : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+                            }
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Panneau versements ── */}
+                {isExpanded && !isAnnule && (
+                  <div className="border-t border-slate-100">
+
+                    {/* Timeline des versements */}
+                    {receipt.payments.length === 0 ? (
+                      <div className="px-5 py-5 text-center">
+                        <p className="text-xs text-slate-400">Aucun versement enregistré sur ce bien</p>
+                      </div>
+                    ) : (
+                      <div className="px-5 pt-4 pb-2">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                          Versements ({receipt.payments.length})
+                        </p>
+                        <div className="space-y-3">
+                          {receipt.payments.map((p, i) => (
+                            <div key={p.id} className="flex items-start gap-3">
+                              {/* Dot timeline */}
+                              <div className="flex flex-col items-center gap-0.5 shrink-0 pt-1">
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                  i === receipt.payments.length - 1 && isSolde
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {i + 1}
+                                </div>
+                                {i < receipt.payments.length - 1 && (
+                                  <div className="w-px h-4 bg-slate-200" />
+                                )}
+                              </div>
+                              {/* Contenu versement */}
+                              <div className="flex-1 min-w-0 pb-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-slate-800">{formatCFA(p.amount)}</span>
+                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${METHOD_COLORS[p.payment_method] || METHOD_COLORS.autre}`}>
+                                      {METHOD_LABELS[p.payment_method] || p.payment_method}
+                                    </span>
+                                  </div>
+
+                                  {/* Bouton télécharger PDF du versement */}
+                                  <PDFDownloadLink
+                                    document={
+                                      <PaymentPDF
+                                        payment={p}
+                                        receipt={receipt as any}
+                                        client={{
+                                          full_name: client.full_name,
+                                          phone_whatsapp: client.phone_whatsapp,
+                                          email: client.email || null,
+                                        }}
+                                        paymentIndex={i + 1}
+                                        totalPayments={receipt.payments.length}
+                                      />
+                                    }
+                                    fileName={`versement-${i + 1}-${receipt.receipt_number}.pdf`}
+                                  >
+                                    {({ loading: pdfLoading }) => (
+                                      <button
+                                        className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-[#8B1A1A] hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+                                        title={pdfLoading ? 'Génération...' : 'Télécharger ce reçu'}
+                                        disabled={pdfLoading}
+                                      >
+                                        <Download className="h-3 w-3" />
+                                        {pdfLoading ? '...' : 'PDF'}
+                                      </button>
+                                    )}
+                                  </PDFDownloadLink>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 flex-wrap">
+                                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(p.payment_date)}</span>
+                                  {p.reference && <span className="font-mono bg-slate-100 px-1 rounded">Réf: {p.reference}</span>}
+                                </div>
+                                {p.amount_words && (
+                                  <p className="text-[10px] italic text-slate-400 mt-0.5 leading-tight">{p.amount_words}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bouton ajouter versement */}
+                    {receipt.amount_due > 0 && (
+                      <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+                        <button
+                          onClick={() => setAddPaymentFor(receipt)}
+                          className="w-full flex items-center justify-center gap-2 text-xs font-medium text-[#8B1A1A] hover:bg-red-50 border border-dashed border-red-200 rounded-lg py-2.5 transition-colors"
+                        >
+                          <PlusCircle className="h-3.5 w-3.5" />
+                          Ajouter un versement — reste {formatCFA(receipt.amount_due)}
+                        </button>
+                      </div>
+                    )}
+
+                    {isSolde && (
+                      <div className="px-5 py-3 border-t border-emerald-100 bg-emerald-50/40 flex items-center justify-center gap-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                        <span className="text-xs text-emerald-600 font-medium">Bien entièrement payé</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ── Modale : Nouveau bien ── */}
+      {showNewReceipt && (
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="flex items-center gap-3 mb-6">
+              <button onClick={() => setShowNewReceipt(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+                <X className="h-4 w-4 text-slate-600" />
+              </button>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Nouveau bien</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Client : <strong>{client.full_name}</strong></p>
+              </div>
+            </div>
+            <ReceiptForm
+              defaultClient={client}
+              onSuccess={() => { setShowNewReceipt(false); loadAll(); }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Modale : Ajouter versement ── */}
+      {addPaymentFor && (
+        <AddPaymentModal
+          receipt={addPaymentFor}
+          onClose={() => setAddPaymentFor(null)}
+          onSaved={() => { setAddPaymentFor(null); loadAll(); }}
+        />
+      )}
+
+      {/* ── Modale : Modifier client ── */}
       {showEdit && (
         <EditClientDialog
           client={client}
           onClose={() => setShowEdit(false)}
-          onSaved={() => { setShowEdit(false); loadClient(); }}
+          onSaved={() => { setShowEdit(false); loadAll(); }}
         />
       )}
 
-      {/* Modal Supprimer */}
-      <Dialog open={showDelete} onOpenChange={setShowDelete}>
+      {/* ── Modale : Supprimer client ── */}
+      <Dialog open={showDelete} onOpenChange={(v) => { if (!v) { setDeleteConfirm(''); } setShowDelete(v); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-slate-800">Supprimer ce client</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-red-700 flex items-center gap-2">
+              <Trash2 className="h-4 w-4" />
+              Supprimer ce client
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-1">
-            <div className="bg-red-50 border border-red-200/60 rounded-lg px-4 py-3">
-              <p className="text-xs text-red-700">
-                Vous allez supprimer <strong>{client.full_name}</strong>. Cette action est irréversible.
+
+            {/* Ce qui sera supprimé */}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-red-800">
+                ⚠️ Cette action est irréversible. Tout sera définitivement supprimé :
               </p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-red-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  Le client <strong>{client.full_name}</strong>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-red-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <strong>{receipts.length} bien{receipts.length > 1 ? 's' : ''}</strong> enregistré{receipts.length > 1 ? 's' : ''}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-red-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  <strong>{receipts.reduce((s, r) => s + r.payments.length, 0)} versement{receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''}</strong> enregistré{receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-red-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                  Tous les reçus PDF et historiques associés
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2 justify-end">
-              <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                onClick={() => setShowDelete(false)}>Annuler</button>
-              <button className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
-                onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Suppression...' : 'Confirmer'}
+
+            {/* Confirmation par saisie du nom */}
+            <div>
+              <Label className="text-xs font-medium text-slate-700">
+                Pour confirmer, tapez le nom du client :
+                <span className="ml-1 font-bold text-slate-900">{client.full_name}</span>
+              </Label>
+              <Input
+                className="mt-1.5 border-red-200 focus:border-red-400 focus:ring-red-400"
+                placeholder={client.full_name}
+                value={deleteConfirm}
+                onChange={e => setDeleteConfirm(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                onClick={() => { setShowDelete(false); setDeleteConfirm(''); }}
+              >
+                Annuler
+              </button>
+              <button
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleDelete}
+                disabled={deleting || deleteConfirm.trim() !== client.full_name.trim()}
+              >
+                {deleting ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Suppression...</>
+                ) : (
+                  <><Trash2 className="h-3.5 w-3.5" /> Supprimer définitivement</>
+                )}
               </button>
             </div>
           </div>
@@ -247,27 +655,162 @@ export default function ClientDetailPage() {
   );
 }
 
+// ── Modal versement ───────────────────────────────────────────────────────────
+function AddPaymentModal({ receipt, onClose, onSaved }: {
+  receipt: ReceiptWithPayments; onClose: () => void; onSaved: () => void;
+}) {
+  const [amountRaw, setAmountRaw]     = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [method, setMethod]           = useState('espèces');
+  const [reference, setReference]     = useState('');
+  const [notes, setNotes]             = useState('');
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState('');
+
+  const amount    = Number(amountRaw.replace(/[^\d]/g, '')) || 0;
+  const amountDue = Number(receipt.amount_due);
+  const remaining = Math.max(0, amountDue - amount);
+  const willSolde = amount > 0 && amount >= amountDue;
+  const words     = amount > 0 ? numberToWordsFr(amount) : '';
+  const pct       = amountDue > 0 ? Math.min(100, Math.round((amount / amountDue) * 100)) : 0;
+  const bienLabel = receipt.property_type === 'motif'
+    ? (receipt.property_description || 'Motif')
+    : receipt.lotissement_name || receipt.localisation_quartier || receipt.property_type;
+
+  async function handleSave() {
+    if (!amount || amount <= 0) { setError('Montant requis'); return; }
+    if (amount > amountDue)     { setError(`Dépasse le reste dû (${formatCFA(amountDue)})`); return; }
+    setSaving(true); setError('');
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_id: receipt.id, payment_date: paymentDate, amount, payment_method: method, reference: reference || null, notes: notes || null }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error || 'Erreur'); return; }
+      onSaved();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold flex items-center gap-2">
+            <Banknote className="h-4 w-4 text-[#8B1A1A]" />
+            Versement
+            <span className="text-slate-400 font-normal text-sm truncate max-w-[160px]">· {bienLabel}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-1">
+          {/* Solde actuel → après */}
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-amber-700">Reste dû sur ce bien</p>
+                <p className="text-2xl font-bold text-amber-800 mt-0.5">{formatCFA(amountDue)}</p>
+              </div>
+              {amount > 0 && (
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">Après versement</p>
+                  <p className={`text-lg font-bold mt-0.5 ${willSolde ? 'text-emerald-600' : 'text-amber-700'}`}>
+                    {willSolde ? '✓ Soldé !' : formatCFA(remaining)}
+                  </p>
+                </div>
+              )}
+            </div>
+            {amount > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-300 ${willSolde ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                    style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-amber-600 text-right">{pct}% du solde couvert</p>
+              </div>
+            )}
+          </div>
+
+          {/* Montant */}
+          <div>
+            <Label className="text-sm font-medium text-slate-700">Montant versé (FCFA) <span className="text-red-500">*</span></Label>
+            <Input className="mt-1.5 text-xl font-bold h-12 border-[#8B1A1A]" placeholder="Ex: 1 500 000"
+              value={amountRaw} onChange={e => setAmountRaw(formatNumberInput(e.target.value))} />
+            {words && <p className="text-xs italic text-[#8B1A1A] mt-1">{words}</p>}
+          </div>
+
+          {/* Date + méthode */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm font-medium text-slate-700">Date</Label>
+              <Input type="date" className="mt-1.5" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-slate-700">Mode</Label>
+              <Select value={method} onValueChange={setMethod}>
+                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="espèces">Espèces</SelectItem>
+                  <SelectItem value="virement">Virement</SelectItem>
+                  <SelectItem value="chèque">Chèque</SelectItem>
+                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                  <SelectItem value="autre">Autre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-slate-700">Référence <span className="text-slate-400 text-xs">(N° chèque…)</span></Label>
+            <Input className="mt-1.5" placeholder="Optionnel" value={reference} onChange={e => setReference(e.target.value)} />
+          </div>
+
+          <div>
+            <Label className="text-sm font-medium text-slate-700">Notes</Label>
+            <Textarea className="mt-1.5 resize-none" rows={2} placeholder="Optionnel" value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-red-700">{error}</p>
+            </div>
+          )}
+
+          <div className="flex gap-2 justify-end pt-1">
+            <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors" onClick={onClose}>
+              Annuler
+            </button>
+            <button
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#8B1A1A] hover:bg-[#6B1414] rounded-lg transition-colors disabled:opacity-50"
+              onClick={handleSave} disabled={saving || amount <= 0}>
+              {saving
+                ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enregistrement...</>
+                : <><CheckCircle2 className="h-3.5 w-3.5" /> Enregistrer</>}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Modifier client ───────────────────────────────────────────────────────────
 function EditClientDialog({ client, onClose, onSaved }: { client: Client; onClose: () => void; onSaved: () => void }) {
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
-      full_name: client.full_name,
-      phone_whatsapp: client.phone_whatsapp,
-      email: client.email || '',
-      nationality: client.nationality || '',
-      client_type: client.client_type,
-      address: client.address || '',
+      full_name: client.full_name, phone_whatsapp: client.phone_whatsapp,
+      email: client.email || '', nationality: client.nationality || '',
+      client_type: client.client_type, address: client.address || '',
     },
   });
-
   async function onSubmit(data: Record<string, string>) {
     setSaving(true);
     await supabase.from('clients').update(data).eq('id', client.id);
-    setSaving(false);
-    onSaved();
+    setSaving(false); onSaved();
   }
-
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -286,10 +829,7 @@ function EditClientDialog({ client, onClose, onSaved }: { client: Client; onClos
             <Input type="email" {...register('email')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Nationalité</Label>
-              <Input {...register('nationality')} />
-            </div>
+            <div><Label>Nationalité</Label><Input {...register('nationality')} /></div>
             <div>
               <Label>Type</Label>
               <select {...register('client_type')} className="w-full h-10 rounded-md border px-3 text-sm">
