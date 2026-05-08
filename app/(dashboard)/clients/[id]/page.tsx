@@ -690,8 +690,7 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
             </div>
             <div>
               <Label className="text-sm font-medium text-slate-700">Mode</Label>
-              <Select value={method} onValueChange={setMethod}>
-                <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+              <Select value={method} onValueChange={(v) => v && setMethod(v)}>
                 <SelectContent>
                   <SelectItem value="espèces">Espèces</SelectItem>
                   <SelectItem value="virement">Virement</SelectItem>
