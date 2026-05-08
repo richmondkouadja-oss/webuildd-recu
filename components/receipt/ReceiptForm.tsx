@@ -39,7 +39,13 @@ interface ReceiptFormValues {
   amount_paid: string;
 }
 
-export default function ReceiptForm() {
+// ── NOUVEAU : props optionnelles ──────────────────────────────────────────────
+interface ReceiptFormProps {
+  defaultClient?: Client;
+  onSuccess?: () => void;
+}
+
+export default function ReceiptForm({ defaultClient, onSuccess }: ReceiptFormProps = {}) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -48,9 +54,10 @@ export default function ReceiptForm() {
       receipt_date: new Date().toISOString().split('T')[0],
       property_type: 'terrain',
       quantity: 1,
-      client_name: '',
-      client_phone: '',
-      client_email: '',
+      // Pré-remplir si defaultClient fourni
+      client_name:  defaultClient?.full_name       || '',
+      client_phone: defaultClient?.phone_whatsapp  || '',
+      client_email: defaultClient?.email           || '',
       superficie: '',
       localisation_quartier: '',
       localisation_commune: '',
@@ -71,10 +78,12 @@ export default function ReceiptForm() {
   const [showNewClient, setShowNewClient] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  // Pré-sélectionner le client si fourni
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(defaultClient?.id || null);
   const [savedReceipt, setSavedReceipt] = useState<{ id: string; receipt_number: string; pdf_url: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [step, setStep] = useState(1);
+  // Si defaultClient fourni, commencer à l'étape 3 (sauter l'étape client)
+  const [step, setStep] = useState(defaultClient ? 3 : 1);
 
   const propertyType = watch('property_type');
   const quantity = watch('quantity');
@@ -92,7 +101,6 @@ export default function ReceiptForm() {
     loadSites();
   }, []);
 
-  // Sync quantité avec lots pour terrain
   useEffect(() => {
     if (propertyType === 'terrain') {
       const filledLots = lots.filter(l => l.ilot_number || l.lot_number).length;
@@ -206,8 +214,10 @@ export default function ReceiptForm() {
         created_by: user?.id || null,
       };
 
-      if (selectedClientId) {
-        Object.assign(receiptData, { client_id: selectedClientId });
+      // Priorité : defaultClient > client sélectionné > recherche par nom
+      const clientId = defaultClient?.id || selectedClientId;
+      if (clientId) {
+        Object.assign(receiptData, { client_id: clientId });
       } else if (data.client_name) {
         const { data: existingClient } = await supabase
           .from('clients').select('id').eq('full_name', data.client_name).single();
@@ -279,12 +289,29 @@ export default function ReceiptForm() {
     } catch { alert("Erreur lors de l'envoi de l'email"); }
   }
 
-  const STEPS = propertyType === 'motif'
-    ? ['En-tête', 'Client', 'Motif', 'Finance', 'Signatures']
-    : ['En-tête', 'Client', 'Bien', 'Finance', 'Signatures'];
+  // Étapes : si defaultClient fourni, on saute l'étape "Client"
+  const STEPS = defaultClient
+    ? (propertyType === 'motif' ? ['En-tête', 'Motif', 'Finance', 'Signatures'] : ['En-tête', 'Bien', 'Finance', 'Signatures'])
+    : (propertyType === 'motif' ? ['En-tête', 'Client', 'Motif', 'Finance', 'Signatures'] : ['En-tête', 'Client', 'Bien', 'Finance', 'Signatures']);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+
+      {/* Bandeau client pré-sélectionné */}
+      {defaultClient && (
+        <div className="bg-[#002255]/5 border border-[#002255]/20 rounded-xl px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#002255]/10 flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold text-[#002255]">
+              {defaultClient.full_name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#002255]">{defaultClient.full_name}</p>
+            <p className="text-xs text-slate-500">{defaultClient.phone_whatsapp}{defaultClient.email ? ` · ${defaultClient.email}` : ''}</p>
+          </div>
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="flex items-center gap-2">
         {STEPS.map((s, i) => (
@@ -328,21 +355,20 @@ export default function ReceiptForm() {
                   className={errors.receipt_date ? 'border-red-500' : ''} />
                 {errors.receipt_date && <p className="text-xs text-red-600 mt-1">{errors.receipt_date.message}</p>}
               </div>
-              <Button type="button" onClick={() => goToStep(2)} className="bg-[#002255] hover:bg-[#001844]">
+              <Button type="button" onClick={() => goToStep(defaultClient ? 3 : 2)} className="bg-[#002255] hover:bg-[#001844]">
                 Suivant
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* Étape 2 — Client */}
-        {step === 2 && (
+        {/* Étape 2 — Client (uniquement sans defaultClient) */}
+        {step === 2 && !defaultClient && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Informations client</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-
               {watch('client_name') ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
                   <div>
@@ -350,11 +376,9 @@ export default function ReceiptForm() {
                     <p className="text-xs text-green-600">{watch('client_phone')}</p>
                     {watch('client_email') && <p className="text-xs text-green-600">{watch('client_email')}</p>}
                   </div>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => { setValue('client_name', ''); setValue('client_phone', ''); setValue('client_email', ''); setSelectedClientId(null); }}
-                    className="text-xs text-red-500 hover:text-red-700 underline"
-                  >
+                    className="text-xs text-red-500 hover:text-red-700 underline">
                     Changer
                   </button>
                 </div>
@@ -365,13 +389,10 @@ export default function ReceiptForm() {
                   </div>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Rechercher un client existant..."
-                      className="pl-9"
+                    <Input placeholder="Rechercher un client existant..." className="pl-9"
                       value={clientSearch}
                       onChange={(e) => { setClientSearch(e.target.value); setShowClientSearch(true); }}
-                      onFocus={() => setShowClientSearch(true)}
-                    />
+                      onFocus={() => setShowClientSearch(true)} />
                     {showClientSearch && clientSearch && (
                       <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto mt-1">
                         {filteredClients.map(c => (
@@ -381,27 +402,19 @@ export default function ReceiptForm() {
                             <span className="text-muted-foreground ml-2">{c.phone_whatsapp}</span>
                           </button>
                         ))}
-                        {filteredClients.length === 0 && (
-                          <p className="px-4 py-2 text-sm text-muted-foreground">Aucun client trouvé</p>
-                        )}
+                        {filteredClients.length === 0 && <p className="px-4 py-2 text-sm text-muted-foreground">Aucun client trouvé</p>}
                       </div>
                     )}
                   </div>
                   <Button type="button" variant="outline" className="w-full" onClick={() => setShowNewClient(true)}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Créer un nouveau client
+                    <UserPlus className="mr-2 h-4 w-4" />Créer un nouveau client
                   </Button>
                 </div>
               )}
-
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>Précédent</Button>
-                <Button
-                  type="button"
-                  onClick={() => goToStep(3)}
-                  disabled={!watch('client_name')}
-                  className="bg-[#002255] hover:bg-[#001844] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <Button type="button" onClick={() => goToStep(3)} disabled={!watch('client_name')}
+                  className="bg-[#002255] hover:bg-[#001844] disabled:opacity-50 disabled:cursor-not-allowed">
                   Suivant
                 </Button>
               </div>
@@ -413,28 +426,20 @@ export default function ReceiptForm() {
         {step === 3 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">
-                {propertyType === 'motif' ? 'Motif du paiement' : 'Bien acheté'}
-              </CardTitle>
+              <CardTitle className="text-lg">{propertyType === 'motif' ? 'Motif du paiement' : 'Bien acheté'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Controller
-                  control={control}
-                  name="property_type"
+                <Controller control={control} name="property_type"
                   render={({ field }) => (
                     <>
                       {(['terrain', 'maison', 'motif'] as const).map(type => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => field.onChange(type)}
+                        <button key={type} type="button" onClick={() => field.onChange(type)}
                           className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
                             field.value === type
                               ? 'border-[#FF6600] bg-[#002255] text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                          }`}
-                        >
+                          }`}>
                           {type.charAt(0).toUpperCase() + type.slice(1)}
                         </button>
                       ))}
@@ -451,12 +456,9 @@ export default function ReceiptForm() {
                   </div>
                   <div>
                     <Label htmlFor="motif">Motif du paiement *</Label>
-                    <Textarea
-                      {...register('motif', { required: 'Motif requis' })}
-                      rows={4}
+                    <Textarea {...register('motif', { required: 'Motif requis' })} rows={4}
                       placeholder="Ex: Frais de dossier, Réservation parcelle..."
-                      className={`mt-1 ${errors.motif ? 'border-red-500' : ''}`}
-                    />
+                      className={`mt-1 ${errors.motif ? 'border-red-500' : ''}`} />
                     {errors.motif && <p className="text-xs text-red-600 mt-1">{errors.motif.message}</p>}
                   </div>
                 </div>
@@ -490,18 +492,12 @@ export default function ReceiptForm() {
                   </div>
                   <div>
                     <Label>Nom du lotissement</Label>
-                    <Controller
-                      control={control}
-                      name="lotissement_name"
+                    <Controller control={control} name="lotissement_name"
                       render={({ field }) => (
                         <Select value={field.value === '__other' ? '__other' : field.value} onValueChange={(v) => field.onChange(v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un site" />
-                          </SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder="Sélectionner un site" /></SelectTrigger>
                           <SelectContent>
-                            {sites.map(s => (
-                              <SelectItem key={s.id} value={s.name}>{s.name} — {s.city}</SelectItem>
-                            ))}
+                            {sites.map(s => (<SelectItem key={s.id} value={s.name}>{s.name} — {s.city}</SelectItem>))}
                             <SelectItem value="__other">Autre (saisie libre)</SelectItem>
                           </SelectContent>
                         </Select>
@@ -543,7 +539,7 @@ export default function ReceiptForm() {
               )}
 
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setStep(2)}>Précédent</Button>
+                <Button type="button" variant="outline" onClick={() => setStep(defaultClient ? 1 : 2)}>Précédent</Button>
                 <Button type="button" onClick={() => goToStep(4)} className="bg-[#002255] hover:bg-[#001844]">Suivant</Button>
               </div>
             </CardContent>
@@ -553,107 +549,50 @@ export default function ReceiptForm() {
         {/* Étape 4 — Finance */}
         {step === 4 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Éléments financiers</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Éléments financiers</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {propertyType !== 'terrain' && (
                 <div>
                   <Label>Quantité</Label>
-                  <Controller
-                    control={control}
-                    name="quantity"
+                  <Controller control={control} name="quantity"
                     render={({ field }) => (
-                      <Input
-                        type="number"
-                      /*   min={1} */
-                        value={field.value}
-                        onChange={(e) => field.onChange(Number(e.target.value) )}
-                        placeholder="1"
-                      />
-                    )}
-                  />
+                      <Input type="number" value={field.value}
+                        onChange={(e) => field.onChange(Number(e.target.value))} placeholder="1" />
+                    )} />
                 </div>
               )}
-
-            {/*   {propertyType !== 'terrain' && (
-                <div>
-                  <Label>Quantité</Label>
-                  <Controller
-                    control={control}
-                    name="quantity"
-                    render={({ field }) => (
-                      <Input
-                        type="number"
-                        min={1}
-                        value={field.value}
-                        onChange={(e) => field.onChange(Number(e.target.value) || 1)}
-                        placeholder="1"
-                      />
-                    )}
-                  />
-                </div>
-              )} */}
-
               <div>
                 <Label>Prix unitaire (FCFA) *</Label>
-                <Controller
-                  control={control}
-                  name="unit_price"
-                  rules={{
-                    required: 'Prix unitaire requis',
-                    validate: v => Number(String(v).replace(/[^\d]/g, '')) > 0 || 'Le prix doit être supérieur à 0'
-                  }}
+                <Controller control={control} name="unit_price"
+                  rules={{ required: 'Prix unitaire requis', validate: v => Number(String(v).replace(/[^\d]/g, '')) > 0 || 'Le prix doit être supérieur à 0' }}
                   render={({ field }) => (
-                    <Input
-                      value={field.value}
-                      onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
-                      placeholder="Ex: 6 000 000"
-                      className={errors.unit_price ? 'border-red-500' : ''}
-                    />
-                  )}
-                />
+                    <Input value={field.value} onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
+                      placeholder="Ex: 6 000 000" className={errors.unit_price ? 'border-red-500' : ''} />
+                  )} />
                 {errors.unit_price && <p className="text-xs text-red-600 mt-1">{errors.unit_price.message}</p>}
               </div>
-
               <div className="bg-gray-50 rounded-lg p-4">
                 <Label className="text-muted-foreground">Montant total</Label>
                 <p className="text-2xl font-bold mt-1">{formatCFA(totalAmount)}</p>
-                {propertyType !== 'motif' && (
-                  <p className="text-xs text-muted-foreground">= Prix unitaire × {quantity || 1} lot(s)</p>
-                )}
+                {propertyType !== 'motif' && <p className="text-xs text-muted-foreground">= Prix unitaire × {quantity || 1} lot(s)</p>}
               </div>
-
-              <div className="border-2 border-[#FF6600] rounded-xl p-5 bg-red-50/50">
+              <div className="border-2 border-[#FF6600] rounded-xl p-5 bg-orange-50/30">
                 <Label className="text-lg font-bold text-[#002255]">Somme versée (FCFA) *</Label>
-                <Controller
-                  control={control}
-                  name="amount_paid"
-                  rules={{ required: 'Somme versée requise' }}
+                <Controller control={control} name="amount_paid" rules={{ required: 'Somme versée requise' }}
                   render={({ field }) => (
-                    <Input
-                      value={field.value}
-                      onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
+                    <Input value={field.value} onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
                       placeholder="Ex: 3 000 000"
-                      className={`text-2xl h-14 font-bold border-[#FF6600] mt-2 ${errors.amount_paid ? 'border-red-500' : ''}`}
-                    />
-                  )}
-                />
+                      className={`text-2xl h-14 font-bold border-[#FF6600] mt-2 ${errors.amount_paid ? 'border-red-500' : ''}`} />
+                  )} />
                 {errors.amount_paid && <p className="text-xs text-red-600 mt-1">{errors.amount_paid.message}</p>}
-                {amountPaid > totalAmount && (
-                  <p className="text-sm text-red-600 mt-1">La somme versée dépasse le montant total</p>
-                )}
-                {amountPaidWords && (
-                  <p className="text-sm italic text-[#002255] mt-2">{amountPaidWords}</p>
-                )}
+                {amountPaid > totalAmount && <p className="text-sm text-red-600 mt-1">La somme versée dépasse le montant total</p>}
+                {amountPaidWords && <p className="text-sm italic text-[#002255] mt-2">{amountPaidWords}</p>}
               </div>
-
-              <div className={`rounded-lg p-4 ${amountDue > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              <div className={`rounded-lg p-4 ${amountDue > 0 ? 'bg-orange-50 text-[#FF6600]' : 'bg-green-50 text-green-700'}`}>
                 <Label className="text-muted-foreground">Reste dû</Label>
                 <p className="text-2xl font-bold mt-1">{formatCFA(Math.max(0, amountDue))}</p>
                 {amountDue <= 0 && <Badge className="bg-green-600 mt-1">SOLDÉ</Badge>}
               </div>
-
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(3)}>Précédent</Button>
                 <Button type="button" onClick={() => goToStep(5)} className="bg-[#002255] hover:bg-[#001844]">Suivant</Button>
@@ -665,9 +604,7 @@ export default function ReceiptForm() {
         {/* Étape 5 — Signatures */}
         {step === 5 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Signatures</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Signatures</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 gap-8">
                 <div className="text-center space-y-4">
@@ -691,8 +628,7 @@ export default function ReceiptForm() {
         {/* Sticky action bar */}
         <div className="sticky bottom-0 bg-white border-t p-4 rounded-t-xl shadow-lg -mx-4 flex flex-wrap gap-2 justify-end">
           <Button type="button" variant="outline" onClick={() => setShowPreview(true)}>
-            <Eye className="mr-2 h-4 w-4" />
-            Aperçu PDF
+            <Eye className="mr-2 h-4 w-4" />Aperçu PDF
           </Button>
           <Button type="submit" className="bg-[#002255] hover:bg-[#001844]" disabled={saving}>
             <CheckCircle className="mr-2 h-4 w-4" />
@@ -712,7 +648,10 @@ export default function ReceiptForm() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+      <Dialog open={showSuccess} onOpenChange={(open) => {
+        setShowSuccess(open);
+        if (!open && onSuccess) onSuccess();
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center">
@@ -741,9 +680,16 @@ export default function ReceiptForm() {
                   <Printer className="mr-2 h-4 w-4" />Imprimer
                 </Button>
               </div>
-              <Button className="w-full bg-[#002255] hover:bg-[#001844]" onClick={() => router.push('/recus')}>
-                Voir tous les reçus
-              </Button>
+              {onSuccess ? (
+                <Button className="w-full bg-[#002255] hover:bg-[#001844]"
+                  onClick={() => { setShowSuccess(false); onSuccess(); }}>
+                  Retour à la fiche client
+                </Button>
+              ) : (
+                <Button className="w-full bg-[#002255] hover:bg-[#001844]" onClick={() => router.push('/recus')}>
+                  Voir tous les reçus
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
@@ -784,10 +730,7 @@ function NewClientForm({ onCreated }: { onCreated: (client: Client) => void }) {
         <Input type="email" {...register('email')} />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Nationalité</Label>
-          <Input {...register('nationality')} />
-        </div>
+        <div><Label>Nationalité</Label><Input {...register('nationality')} /></div>
         <div>
           <Label>Type</Label>
           <select {...register('client_type')} className="w-full h-10 rounded-md border px-3 text-sm">
