@@ -11,7 +11,7 @@ import {
 import { formatCFA, formatDate } from '@/lib/utils/formatters';
 import type { Receipt, ReceiptLot } from '@/lib/supabase/types';
 
-const WEBUILDD_RED = '#8B1A1A';
+const WEBUILDD_RED = '#002255';
 const GRAY_DARK = '#1A1A1A';
 const GRAY_LIGHT = '#F5F5F5';
 

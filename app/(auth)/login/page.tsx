@@ -45,7 +45,7 @@ async function handleLogin(e: React.FormEvent) {
   return (
     <Card className="w-full max-w-md border-0 shadow-2xl">
       <CardHeader className="text-center space-y-4 pb-2">
-        <div className="mx-auto w-20 h-20 bg-[#8B1A1A] rounded-2xl flex items-center justify-center">
+        <div className="mx-auto w-20 h-20 bg-[#002255] rounded-2xl flex items-center justify-center">
           <span className="text-white font-heading text-2xl font-bold">W</span>
         </div>
         <div>
@@ -89,7 +89,7 @@ async function handleLogin(e: React.FormEvent) {
           {error && (
             <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>
           )}
-          <Button type="submit" className="w-full bg-[#8B1A1A] hover:bg-[#6B1414]" disabled={loading}>
+          <Button type="submit" className="w-full bg-[#002255] hover:bg-[#001844]" disabled={loading}>
             <LogIn className="mr-2 h-4 w-4" />
             {loading ? 'Connexion...' : 'Se connecter'}
           </Button>

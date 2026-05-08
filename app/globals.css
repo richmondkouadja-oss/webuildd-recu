@@ -48,9 +48,13 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 
   /* Brand tokens */
-  --color-brand:       #AB0303;
-  --color-brand-dark:  #8B0202;
-  --color-brand-light: #FEF2F2;
+  --color-brand:       #002255;
+  --color-brand-dark:  #001844;
+  --color-brand-light: #EEF2FF;
+
+  /* Accent orange */
+  --color-accent-brand:       #FF6600;
+  --color-accent-brand-light: #FFF3E0;
 }
 
 :root {
@@ -61,8 +65,8 @@
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
 
-  /* Rouge principal modifié */
-  --primary: #AA0000;
+  /* Bleu principal */
+  --primary: #002255;
   --primary-foreground: #FFFFFF;
 
   --secondary: #F1F5F9;
@@ -71,21 +75,20 @@
   --muted: #F1F5F9;
   --muted-foreground: #64748B;
 
-  --accent: #FEF2F2;
-  --accent-foreground: #DC2626;
+  --accent: #EEF2FF;
+  --accent-foreground: #002255;
 
-  /* Rouge destructif modifié */
-  --destructive: #AA0000;
+  /* Destructif — garde un rouge neutre */
+  --destructive: #DC2626;
 
   --border: #E2E8F0;
   --input: #E2E8F0;
 
-  /* Ring modifié */
-  --ring: #AA0000;
+  --ring: #002255;
 
-  /* Charts */
-  --chart-1: #AA0000;
-  --chart-2: #F59E0B;
+  /* Charts — bleu + orange en tête */
+  --chart-1: #002255;
+  --chart-2: #FF6600;
   --chart-3: #059669;
   --chart-4: #3B82F6;
   --chart-5: #8B5CF6;
@@ -96,15 +99,14 @@
   --sidebar: #FFFFFF;
   --sidebar-foreground: #0F172A;
 
-  /* Sidebar primary modifié */
-  --sidebar-primary: #AA0000;
+  --sidebar-primary: #002255;
   --sidebar-primary-foreground: #FFFFFF;
 
-  --sidebar-accent: #FEF2F2;
-  --sidebar-accent-foreground: #AA0000;
+  --sidebar-accent: #EEF2FF;
+  --sidebar-accent-foreground: #002255;
 
   --sidebar-border: #F1F5F9;
-  --sidebar-ring: #AA0000;
+  --sidebar-ring: #002255;
 }
 @layer base {
   * {

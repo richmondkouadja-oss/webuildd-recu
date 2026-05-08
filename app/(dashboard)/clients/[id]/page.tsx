@@ -24,7 +24,6 @@ import ReceiptForm from '@/components/receipt/ReceiptForm';
 import ReceiptPDF from '@/components/receipt/ReceiptPDF';
 import PaymentPDF from '@/components/receipt/PaymentPDF';
 
-// PDFDownloadLink chargé côté client uniquement (pas de SSR)
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink),
   { ssr: false, loading: () => (
@@ -83,14 +82,14 @@ export default function ClientDetailPage() {
   const supabaseRef = useRef(createClient());
   const supabase    = supabaseRef.current;
 
-  const [client, setClient]             = useState<Client | null>(null);
-  const [receipts, setReceipts]         = useState<ReceiptWithPayments[]>([]);
-  const [isAdmin, setIsAdmin]           = useState(false);
-  const [showEdit, setShowEdit]         = useState(false);
-  const [showDelete, setShowDelete]     = useState(false);
-  const [deleting, setDeleting]         = useState(false);
+  const [client, setClient]               = useState<Client | null>(null);
+  const [receipts, setReceipts]           = useState<ReceiptWithPayments[]>([]);
+  const [isAdmin, setIsAdmin]             = useState(false);
+  const [showEdit, setShowEdit]           = useState(false);
+  const [showDelete, setShowDelete]       = useState(false);
+  const [deleting, setDeleting]           = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [showNewReceipt, setShowNewReceipt] = useState(false);
+  const [showNewReceipt, setShowNewReceipt]   = useState(false);
   const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
   const [addPaymentFor, setAddPaymentFor]     = useState<ReceiptWithPayments | null>(null);
 
@@ -135,11 +134,8 @@ export default function ClientDetailPage() {
     if (!client) return;
     setDeleting(true);
     try {
-      // Récupérer tous les reçus du client
       const { data: clientReceipts } = await supabase
         .from('receipts').select('id').eq('client_id', client.id);
-
-      // Supprimer les versements de chaque reçu (cascade via SQL mais on s'assure)
       if (clientReceipts && clientReceipts.length > 0) {
         const receiptIds = clientReceipts.map(r => r.id);
         await supabase.from('payments').delete().in('receipt_id', receiptIds);
@@ -147,8 +143,6 @@ export default function ClientDetailPage() {
         await supabase.from('receipt_sends').delete().in('receipt_id', receiptIds);
         await supabase.from('receipts').delete().in('id', receiptIds);
       }
-
-      // Supprimer le client
       await supabase.from('clients').delete().eq('id', client.id);
       router.push('/clients');
     } catch (err) {
@@ -161,7 +155,7 @@ export default function ClientDetailPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-7 h-7 border-2 border-[#002255] border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-400">Chargement...</p>
         </div>
       </div>
@@ -184,8 +178,8 @@ export default function ClientDetailPage() {
           <ArrowLeft className="h-4 w-4 text-slate-600" />
         </button>
         <div className="flex items-center gap-4 flex-1 min-w-0">
-          <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-            <span className="text-sm font-bold text-indigo-700">{clientInitials(client.full_name)}</span>
+          <div className="w-11 h-11 rounded-full bg-[#002255]/10 flex items-center justify-center shrink-0">
+            <span className="text-sm font-bold text-[#002255]">{clientInitials(client.full_name)}</span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -199,8 +193,9 @@ export default function ClientDetailPage() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
+            {/* Bouton principal — bleu */}
             <button onClick={() => setShowNewReceipt(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#002255] hover:bg-[#001844] text-white rounded-lg transition-colors shadow-sm">
               <PlusCircle className="h-3.5 w-3.5" />
               Nouveau bien
             </button>
@@ -227,8 +222,8 @@ export default function ClientDetailPage() {
           { icon: Mail,  label: 'Email',     value: client.email || '—' },
         ].map((c, i) => (
           <div key={i} className="bg-white rounded-xl border border-slate-200/80 shadow-sm px-4 py-3.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-              <c.icon className="h-4 w-4 text-indigo-600" />
+            <div className="w-8 h-8 rounded-lg bg-[#002255]/10 flex items-center justify-center shrink-0">
+              <c.icon className="h-4 w-4 text-[#002255]" />
             </div>
             <div className="min-w-0">
               <p className="text-xs text-slate-400">{c.label}</p>
@@ -241,10 +236,10 @@ export default function ClientDetailPage() {
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Biens',      value: activeReceipts.length,   icon: FileText,    bg: 'bg-indigo-50',  ic: 'text-indigo-500',  vc: 'text-indigo-700'  },
-          { label: 'Total versé',value: formatCFA(totalPaid),     icon: Wallet,      bg: 'bg-emerald-50', ic: 'text-emerald-500', vc: 'text-emerald-700' },
-          { label: 'Reste dû',   value: formatCFA(totalDue),      icon: TrendingUp,  bg: totalDue > 0 ? 'bg-red-50' : 'bg-emerald-50', ic: totalDue > 0 ? 'text-red-500' : 'text-emerald-500', vc: totalDue > 0 ? 'text-red-600' : 'text-emerald-700' },
-          { label: 'Soldés',     value: `${countSolde}/${activeReceipts.length}`, icon: CheckCircle2, bg: 'bg-amber-50', ic: 'text-amber-500', vc: 'text-amber-700' },
+          { label: 'Biens',       value: activeReceipts.length,                       icon: FileText,    bg: 'bg-[#002255]/5',  ic: 'text-[#002255]',   vc: 'text-[#002255]'   },
+          { label: 'Total versé', value: formatCFA(totalPaid),                         icon: Wallet,      bg: 'bg-emerald-50',   ic: 'text-emerald-500', vc: 'text-emerald-700' },
+          { label: 'Reste dû',    value: formatCFA(totalDue),                          icon: TrendingUp,  bg: totalDue > 0 ? 'bg-orange-50' : 'bg-emerald-50', ic: totalDue > 0 ? 'text-[#FF6600]' : 'text-emerald-500', vc: totalDue > 0 ? 'text-[#FF6600]' : 'text-emerald-700' },
+          { label: 'Soldés',      value: `${countSolde}/${activeReceipts.length}`,     icon: CheckCircle2, bg: 'bg-amber-50',   ic: 'text-amber-500',   vc: 'text-amber-700'   },
         ].map((k, i) => (
           <div key={i} className={`${k.bg} rounded-2xl p-4 shadow-sm flex items-center gap-3`}>
             <div className="w-9 h-9 rounded-xl bg-white/60 flex items-center justify-center shrink-0">
@@ -269,13 +264,16 @@ export default function ClientDetailPage() {
           </div>
           <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-[#8B1A1A] to-red-400 rounded-full transition-all duration-700"
-              style={{ width: `${Math.min(100, (totalPaid / totalAmount) * 100)}%` }}
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${Math.min(100, (totalPaid / totalAmount) * 100)}%`,
+                background: 'linear-gradient(to right, #002255, #FF6600)',
+              }}
             />
           </div>
           <div className="flex justify-between mt-1.5 text-xs">
             <span className="text-emerald-600 font-medium">{formatCFA(totalPaid)} versés</span>
-            <span className={`font-medium ${totalDue > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+            <span className={`font-medium ${totalDue > 0 ? 'text-[#FF6600]' : 'text-emerald-600'}`}>
               {totalDue > 0 ? `${formatCFA(totalDue)} restants` : '✓ Tout soldé'}
             </span>
           </div>
@@ -298,7 +296,7 @@ export default function ClientDetailPage() {
             </div>
             <p className="text-sm text-slate-400 mb-3">Aucun bien enregistré pour ce client</p>
             <button onClick={() => setShowNewReceipt(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700">
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#002255] hover:text-[#001844]">
               <PlusCircle className="h-3.5 w-3.5" />
               Enregistrer le premier bien
             </button>
@@ -321,15 +319,13 @@ export default function ClientDetailPage() {
                 {/* ── En-tête bien ── */}
                 <div className="px-5 py-4">
                   <div className="flex items-start gap-3">
-                    {/* Icône */}
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                      isSolde ? 'bg-emerald-100' : isAnnule ? 'bg-slate-100' : 'bg-amber-50'
+                      isSolde ? 'bg-emerald-100' : isAnnule ? 'bg-slate-100' : 'bg-[#002255]/10'
                     }`}>
-                      <MapPin className={`h-5 w-5 ${isSolde ? 'text-emerald-600' : isAnnule ? 'text-slate-400' : 'text-amber-600'}`} />
+                      <MapPin className={`h-5 w-5 ${isSolde ? 'text-emerald-600' : isAnnule ? 'text-slate-400' : 'text-[#002255]'}`} />
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      {/* Titre + statut */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-slate-800">{bienLabel || receipt.property_type}</p>
                         {isSolde && (
@@ -338,7 +334,7 @@ export default function ClientDetailPage() {
                           </span>
                         )}
                         {receipt.status === 'partiel' && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#FF6600]/10 text-[#FF6600]">
                             <Clock className="h-3 w-3" /> En cours · {receipt.payments.length} versement{receipt.payments.length > 1 ? 's' : ''}
                           </span>
                         )}
@@ -347,7 +343,6 @@ export default function ClientDetailPage() {
                         )}
                       </div>
 
-                      {/* Meta */}
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         <span className="text-xs text-slate-400 font-mono">{receipt.receipt_number}</span>
                         <span className="text-xs text-slate-400">{formatDate(receipt.receipt_date)}</span>
@@ -356,18 +351,17 @@ export default function ClientDetailPage() {
                         )}
                       </div>
 
-                      {/* Barre de progression par bien */}
                       {!isAnnule && (
                         <div className="mt-3 space-y-1">
                           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? 'bg-emerald-500' : 'bg-[#8B1A1A]'}`}
+                              className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? 'bg-emerald-500' : 'bg-[#002255]'}`}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-emerald-600 font-medium">{formatCFA(receipt.amount_paid)}</span>
-                            <span className={`font-medium ${receipt.amount_due > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                            <span className={`font-medium ${receipt.amount_due > 0 ? 'text-[#FF6600]' : 'text-emerald-600'}`}>
                               {receipt.amount_due > 0 ? `reste ${formatCFA(receipt.amount_due)}` : '✓'}
                             </span>
                           </div>
@@ -379,24 +373,16 @@ export default function ClientDetailPage() {
                     <div className="flex flex-col items-end gap-2 shrink-0">
                       <p className="text-sm font-bold text-slate-700">{formatCFA(receipt.total_amount)}</p>
                       <div className="flex items-center gap-1.5">
-
-                        {/* Bouton voir le reçu */}
                         <Link href={`/recus/${receipt.id}`}>
                           <button className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors" title="Voir le reçu">
                             <FileText className="h-3.5 w-3.5 text-slate-500" />
                           </button>
                         </Link>
 
-                        {/* Bouton télécharger PDF */}
                         <PDFDownloadLink
                           document={
                             <ReceiptPDF
-                              receipt={{
-                                ...receipt,
-                                client_name:  client.full_name,
-                                client_phone: client.phone_whatsapp,
-                                client_email: client.email || '',
-                              } as any}
+                              receipt={{ ...receipt, client_name: client.full_name, client_phone: client.phone_whatsapp, client_email: client.email || '' } as any}
                               lots={receipt.receipt_lots || []}
                             />
                           }
@@ -404,14 +390,15 @@ export default function ClientDetailPage() {
                         >
                           {({ loading: pdfLoading }) => (
                             <button
-                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-red-50 flex items-center justify-center transition-colors"
+                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-[#002255]/10 flex items-center justify-center transition-colors"
                               title={pdfLoading ? 'Génération...' : 'Télécharger le PDF'}
                               disabled={pdfLoading}
                             >
-                              <Download className={`h-3.5 w-3.5 ${pdfLoading ? 'text-slate-300' : 'text-slate-500 hover:text-[#8B1A1A]'}`} />
+                              <Download className={`h-3.5 w-3.5 ${pdfLoading ? 'text-slate-300' : 'text-slate-500'}`} />
                             </button>
                           )}
                         </PDFDownloadLink>
+
                         {!isAnnule && (
                           <button
                             onClick={() => setExpandedReceipt(isExpanded ? null : receipt.id)}
@@ -431,8 +418,6 @@ export default function ClientDetailPage() {
                 {/* ── Panneau versements ── */}
                 {isExpanded && !isAnnule && (
                   <div className="border-t border-slate-100">
-
-                    {/* Timeline des versements */}
                     {receipt.payments.length === 0 ? (
                       <div className="px-5 py-5 text-center">
                         <p className="text-xs text-slate-400">Aucun versement enregistré sur ce bien</p>
@@ -445,20 +430,17 @@ export default function ClientDetailPage() {
                         <div className="space-y-3">
                           {receipt.payments.map((p, i) => (
                             <div key={p.id} className="flex items-start gap-3">
-                              {/* Dot timeline */}
                               <div className="flex flex-col items-center gap-0.5 shrink-0 pt-1">
                                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
                                   i === receipt.payments.length - 1 && isSolde
                                     ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-slate-100 text-slate-500'
+                                    : 'bg-[#002255]/10 text-[#002255]'
                                 }`}>
                                   {i + 1}
                                 </div>
-                                {i < receipt.payments.length - 1 && (
-                                  <div className="w-px h-4 bg-slate-200" />
-                                )}
+                                {i < receipt.payments.length - 1 && <div className="w-px h-4 bg-slate-200" />}
                               </div>
-                              {/* Contenu versement */}
+
                               <div className="flex-1 min-w-0 pb-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
@@ -468,17 +450,13 @@ export default function ClientDetailPage() {
                                     </span>
                                   </div>
 
-                                  {/* Bouton télécharger PDF du versement */}
+                                  {/* PDF versement */}
                                   <PDFDownloadLink
                                     document={
                                       <PaymentPDF
                                         payment={p}
                                         receipt={receipt as any}
-                                        client={{
-                                          full_name: client.full_name,
-                                          phone_whatsapp: client.phone_whatsapp,
-                                          email: client.email || null,
-                                        }}
+                                        client={{ full_name: client.full_name, phone_whatsapp: client.phone_whatsapp, email: client.email || null }}
                                         paymentIndex={i + 1}
                                         totalPayments={receipt.payments.length}
                                       />
@@ -487,8 +465,7 @@ export default function ClientDetailPage() {
                                   >
                                     {({ loading: pdfLoading }) => (
                                       <button
-                                        className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-[#8B1A1A] hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
-                                        title={pdfLoading ? 'Génération...' : 'Télécharger ce reçu'}
+                                        className="flex items-center gap-1 text-[10px] font-medium text-slate-400 hover:text-[#002255] hover:bg-[#002255]/10 px-2 py-1 rounded-md transition-colors"
                                         disabled={pdfLoading}
                                       >
                                         <Download className="h-3 w-3" />
@@ -512,12 +489,12 @@ export default function ClientDetailPage() {
                       </div>
                     )}
 
-                    {/* Bouton ajouter versement */}
+                    {/* Bouton ajouter versement — orange en pointillés */}
                     {receipt.amount_due > 0 && (
                       <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
                         <button
                           onClick={() => setAddPaymentFor(receipt)}
-                          className="w-full flex items-center justify-center gap-2 text-xs font-medium text-[#8B1A1A] hover:bg-red-50 border border-dashed border-red-200 rounded-lg py-2.5 transition-colors"
+                          className="w-full flex items-center justify-center gap-2 text-xs font-medium text-[#FF6600] hover:bg-[#FF6600]/5 border border-dashed border-[#FF6600]/40 rounded-lg py-2.5 transition-colors"
                         >
                           <PlusCircle className="h-3.5 w-3.5" />
                           Ajouter un versement — reste {formatCFA(receipt.amount_due)}
@@ -553,10 +530,7 @@ export default function ClientDetailPage() {
                 <p className="text-xs text-slate-400 mt-0.5">Client : <strong>{client.full_name}</strong></p>
               </div>
             </div>
-            <ReceiptForm
-              defaultClient={client}
-              onSuccess={() => { setShowNewReceipt(false); loadAll(); }}
-            />
+            <ReceiptForm defaultClient={client} onSuccess={() => { setShowNewReceipt(false); loadAll(); }} />
           </div>
         </div>
       )}
@@ -572,80 +546,51 @@ export default function ClientDetailPage() {
 
       {/* ── Modale : Modifier client ── */}
       {showEdit && (
-        <EditClientDialog
-          client={client}
-          onClose={() => setShowEdit(false)}
-          onSaved={() => { setShowEdit(false); loadAll(); }}
-        />
+        <EditClientDialog client={client} onClose={() => setShowEdit(false)} onSaved={() => { setShowEdit(false); loadAll(); }} />
       )}
 
       {/* ── Modale : Supprimer client ── */}
-      <Dialog open={showDelete} onOpenChange={(v) => { if (!v) { setDeleteConfirm(''); } setShowDelete(v); }}>
+      <Dialog open={showDelete} onOpenChange={(v) => { if (!v) setDeleteConfirm(''); setShowDelete(v); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-red-700 flex items-center gap-2">
-              <Trash2 className="h-4 w-4" />
-              Supprimer ce client
+              <Trash2 className="h-4 w-4" /> Supprimer ce client
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-1">
-
-            {/* Ce qui sera supprimé */}
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
-              <p className="text-xs font-semibold text-red-800">
-                ⚠️ Cette action est irréversible. Tout sera définitivement supprimé :
-              </p>
+              <p className="text-xs font-semibold text-red-800">⚠️ Cette action est irréversible. Tout sera définitivement supprimé :</p>
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-xs text-red-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  Le client <strong>{client.full_name}</strong>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-red-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  <strong>{receipts.length} bien{receipts.length > 1 ? 's' : ''}</strong> enregistré{receipts.length > 1 ? 's' : ''}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-red-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  <strong>{receipts.reduce((s, r) => s + r.payments.length, 0)} versement{receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''}</strong> enregistré{receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-red-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                  Tous les reçus PDF et historiques associés
-                </div>
+                {[
+                  `Le client ${client.full_name}`,
+                  `${receipts.length} bien${receipts.length > 1 ? 's' : ''} enregistré${receipts.length > 1 ? 's' : ''}`,
+                  `${receipts.reduce((s, r) => s + r.payments.length, 0)} versement${receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''} enregistré${receipts.reduce((s, r) => s + r.payments.length, 0) > 1 ? 's' : ''}`,
+                  'Tous les reçus PDF et historiques associés',
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-red-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Confirmation par saisie du nom */}
             <div>
               <Label className="text-xs font-medium text-slate-700">
-                Pour confirmer, tapez le nom du client :
-                <span className="ml-1 font-bold text-slate-900">{client.full_name}</span>
+                Pour confirmer, tapez : <span className="font-bold text-slate-900">{client.full_name}</span>
               </Label>
-              <Input
-                className="mt-1.5 border-red-200 focus:border-red-400 focus:ring-red-400"
-                placeholder={client.full_name}
-                value={deleteConfirm}
-                onChange={e => setDeleteConfirm(e.target.value)}
-              />
+              <Input className="mt-1.5 border-red-200 focus:border-red-400" placeholder={client.full_name}
+                value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
             </div>
-
             <div className="flex gap-2 justify-end pt-1">
-              <button
-                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                onClick={() => { setShowDelete(false); setDeleteConfirm(''); }}
-              >
-                Annuler
-              </button>
+              <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                onClick={() => { setShowDelete(false); setDeleteConfirm(''); }}>Annuler</button>
               <button
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={handleDelete}
-                disabled={deleting || deleteConfirm.trim() !== client.full_name.trim()}
-              >
-                {deleting ? (
-                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Suppression...</>
-                ) : (
-                  <><Trash2 className="h-3.5 w-3.5" /> Supprimer définitivement</>
-                )}
+                onClick={handleDelete} disabled={deleting || deleteConfirm.trim() !== client.full_name.trim()}>
+                {deleting
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Suppression...</>
+                  : <><Trash2 className="h-3.5 w-3.5" /> Supprimer définitivement</>
+                }
               </button>
             </div>
           </div>
@@ -698,14 +643,13 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
-            <Banknote className="h-4 w-4 text-[#8B1A1A]" />
+            <Banknote className="h-4 w-4 text-[#FF6600]" />
             Versement
             <span className="text-slate-400 font-normal text-sm truncate max-w-[160px]">· {bienLabel}</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
-          {/* Solde actuel → après */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <div className="flex items-center justify-between">
               <div>
@@ -715,7 +659,7 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
               {amount > 0 && (
                 <div className="text-right">
                   <p className="text-xs text-slate-500">Après versement</p>
-                  <p className={`text-lg font-bold mt-0.5 ${willSolde ? 'text-emerald-600' : 'text-amber-700'}`}>
+                  <p className={`text-lg font-bold mt-0.5 ${willSolde ? 'text-emerald-600' : 'text-[#FF6600]'}`}>
                     {willSolde ? '✓ Soldé !' : formatCFA(remaining)}
                   </p>
                 </div>
@@ -724,7 +668,7 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
             {amount > 0 && (
               <div className="mt-2 space-y-1">
                 <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-300 ${willSolde ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                  <div className={`h-full rounded-full transition-all duration-300 ${willSolde ? 'bg-emerald-500' : 'bg-[#FF6600]'}`}
                     style={{ width: `${pct}%` }} />
                 </div>
                 <p className="text-[10px] text-amber-600 text-right">{pct}% du solde couvert</p>
@@ -732,15 +676,13 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
             )}
           </div>
 
-          {/* Montant */}
           <div>
-            <Label className="text-sm font-medium text-slate-700">Montant versé (FCFA) <span className="text-red-500">*</span></Label>
-            <Input className="mt-1.5 text-xl font-bold h-12 border-[#8B1A1A]" placeholder="Ex: 1 500 000"
+            <Label className="text-sm font-medium text-slate-700">Montant versé (FCFA) <span className="text-[#FF6600]">*</span></Label>
+            <Input className="mt-1.5 text-xl font-bold h-12 border-[#002255]" placeholder="Ex: 1 500 000"
               value={amountRaw} onChange={e => setAmountRaw(formatNumberInput(e.target.value))} />
-            {words && <p className="text-xs italic text-[#8B1A1A] mt-1">{words}</p>}
+            {words && <p className="text-xs italic text-[#002255] mt-1">{words}</p>}
           </div>
 
-          {/* Date + méthode */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-sm font-medium text-slate-700">Date</Label>
@@ -782,7 +724,7 @@ function AddPaymentModal({ receipt, onClose, onSaved }: {
               Annuler
             </button>
             <button
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#8B1A1A] hover:bg-[#6B1414] rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#002255] hover:bg-[#001844] rounded-lg transition-colors disabled:opacity-50"
               onClick={handleSave} disabled={saving || amount <= 0}>
               {saving
                 ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enregistrement...</>
@@ -841,7 +783,7 @@ function EditClientDialog({ client, onClose, onSaved }: { client: Client; onClos
           </div>
           <div className="flex gap-2 justify-end pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-            <Button type="submit" className="bg-[#8B1A1A] hover:bg-[#6B1414]" disabled={saving}>
+            <Button type="submit" className="bg-[#002255] hover:bg-[#001844]" disabled={saving}>
               {saving ? 'Enregistrement...' : 'Enregistrer'}
             </Button>
           </div>

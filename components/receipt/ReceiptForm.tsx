@@ -293,7 +293,7 @@ export default function ReceiptForm() {
             type="button"
             onClick={() => i + 1 < step && setStep(i + 1)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              step === i + 1 ? 'bg-[#8B1A1A] text-white'
+              step === i + 1 ? 'bg-[#002255] text-white'
               : step > i + 1 ? 'bg-green-100 text-green-800'
               : 'bg-gray-100 text-gray-500'
             }`}
@@ -313,7 +313,7 @@ export default function ReceiptForm() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <FileText className="h-5 w-5 text-[#8B1A1A]" />
+                <FileText className="h-5 w-5 text-[#002255]" />
                 En-tête du reçu
               </CardTitle>
             </CardHeader>
@@ -328,7 +328,7 @@ export default function ReceiptForm() {
                   className={errors.receipt_date ? 'border-red-500' : ''} />
                 {errors.receipt_date && <p className="text-xs text-red-600 mt-1">{errors.receipt_date.message}</p>}
               </div>
-              <Button type="button" onClick={() => goToStep(2)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">
+              <Button type="button" onClick={() => goToStep(2)} className="bg-[#002255] hover:bg-[#001844]">
                 Suivant
               </Button>
             </CardContent>
@@ -400,7 +400,7 @@ export default function ReceiptForm() {
                   type="button"
                   onClick={() => goToStep(3)}
                   disabled={!watch('client_name')}
-                  className="bg-[#8B1A1A] hover:bg-[#6B1414] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-[#002255] hover:bg-[#001844] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Suivant
                 </Button>
@@ -431,7 +431,7 @@ export default function ReceiptForm() {
                           onClick={() => field.onChange(type)}
                           className={`flex-1 py-3 rounded-lg font-medium text-sm border-2 transition-colors ${
                             field.value === type
-                              ? 'border-[#8B1A1A] bg-[#8B1A1A] text-white'
+                              ? 'border-[#FF6600] bg-[#002255] text-white'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                           }`}
                         >
@@ -544,7 +544,7 @@ export default function ReceiptForm() {
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(2)}>Précédent</Button>
-                <Button type="button" onClick={() => goToStep(4)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
+                <Button type="button" onClick={() => goToStep(4)} className="bg-[#002255] hover:bg-[#001844]">Suivant</Button>
               </div>
             </CardContent>
           </Card>
@@ -624,8 +624,8 @@ export default function ReceiptForm() {
                 )}
               </div>
 
-              <div className="border-2 border-[#8B1A1A] rounded-xl p-5 bg-red-50/50">
-                <Label className="text-lg font-bold text-[#8B1A1A]">Somme versée (FCFA) *</Label>
+              <div className="border-2 border-[#FF6600] rounded-xl p-5 bg-red-50/50">
+                <Label className="text-lg font-bold text-[#002255]">Somme versée (FCFA) *</Label>
                 <Controller
                   control={control}
                   name="amount_paid"
@@ -635,7 +635,7 @@ export default function ReceiptForm() {
                       value={field.value}
                       onChange={(e) => field.onChange(formatNumberInput(e.target.value))}
                       placeholder="Ex: 3 000 000"
-                      className={`text-2xl h-14 font-bold border-[#8B1A1A] mt-2 ${errors.amount_paid ? 'border-red-500' : ''}`}
+                      className={`text-2xl h-14 font-bold border-[#FF6600] mt-2 ${errors.amount_paid ? 'border-red-500' : ''}`}
                     />
                   )}
                 />
@@ -644,7 +644,7 @@ export default function ReceiptForm() {
                   <p className="text-sm text-red-600 mt-1">La somme versée dépasse le montant total</p>
                 )}
                 {amountPaidWords && (
-                  <p className="text-sm italic text-[#8B1A1A] mt-2">{amountPaidWords}</p>
+                  <p className="text-sm italic text-[#002255] mt-2">{amountPaidWords}</p>
                 )}
               </div>
 
@@ -656,7 +656,7 @@ export default function ReceiptForm() {
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setStep(3)}>Précédent</Button>
-                <Button type="button" onClick={() => goToStep(5)} className="bg-[#8B1A1A] hover:bg-[#6B1414]">Suivant</Button>
+                <Button type="button" onClick={() => goToStep(5)} className="bg-[#002255] hover:bg-[#001844]">Suivant</Button>
               </div>
             </CardContent>
           </Card>
@@ -694,7 +694,7 @@ export default function ReceiptForm() {
             <Eye className="mr-2 h-4 w-4" />
             Aperçu PDF
           </Button>
-          <Button type="submit" className="bg-[#8B1A1A] hover:bg-[#6B1414]" disabled={saving}>
+          <Button type="submit" className="bg-[#002255] hover:bg-[#001844]" disabled={saving}>
             <CheckCircle className="mr-2 h-4 w-4" />
             {saving ? 'Création...' : 'Valider & Générer'}
           </Button>
@@ -741,7 +741,7 @@ export default function ReceiptForm() {
                   <Printer className="mr-2 h-4 w-4" />Imprimer
                 </Button>
               </div>
-              <Button className="w-full bg-[#8B1A1A] hover:bg-[#6B1414]" onClick={() => router.push('/recus')}>
+              <Button className="w-full bg-[#002255] hover:bg-[#001844]" onClick={() => router.push('/recus')}>
                 Voir tous les reçus
               </Button>
             </div>
@@ -797,7 +797,7 @@ function NewClientForm({ onCreated }: { onCreated: (client: Client) => void }) {
           </select>
         </div>
       </div>
-      <Button type="submit" className="w-full bg-[#8B1A1A] hover:bg-[#6B1414]" disabled={loading}>
+      <Button type="submit" className="w-full bg-[#002255] hover:bg-[#001844]" disabled={loading}>
         {loading ? 'Création...' : 'Créer le client'}
       </Button>
     </form>

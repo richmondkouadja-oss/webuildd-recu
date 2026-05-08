@@ -23,7 +23,7 @@ export default function ReceiptPreview({ data, lots, open, onClose }: ReceiptPre
           {/* Header */}
           <div className="flex justify-between items-start border-b pb-4">
             <div>
-              <h2 className="font-heading text-xl font-bold text-[#8B1A1A]">WEBUILDD FONCIER & IMMOBILIER</h2>
+              <h2 className="font-heading text-xl font-bold text-[#002255]">WEBUILDD FONCIER & IMMOBILIER</h2>
               <p className="text-xs text-muted-foreground">Marcory Zone 4 — Immeuble Z4</p>
               <p className="text-xs text-muted-foreground">Abidjan, Côte d&apos;Ivoire</p>
             </div>
@@ -34,7 +34,7 @@ export default function ReceiptPreview({ data, lots, open, onClose }: ReceiptPre
           </div>
 
           {/* Title */}
-          <h3 className="text-center text-lg font-bold text-[#8B1A1A]">REÇU DE PAIEMENT</h3>
+          <h3 className="text-center text-lg font-bold text-[#002255]">REÇU DE PAIEMENT</h3>
 
           {/* Client */}
           <div className="bg-gray-50 rounded p-3">
