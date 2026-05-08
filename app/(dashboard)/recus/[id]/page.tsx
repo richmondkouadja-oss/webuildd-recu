@@ -376,8 +376,8 @@ function AddPaymentModal({ open, onClose, receipt, onSaved }: { open: boolean; o
           <div><Label className="text-sm font-medium text-slate-700">Date du versement</Label><Input type="date" className="mt-1.5" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></div>
           <div>
             <Label className="text-sm font-medium text-slate-700">Mode de paiement</Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+<Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v)}>              
+  <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="espèces">Espèces</SelectItem>
                 <SelectItem value="virement">Virement bancaire</SelectItem>
